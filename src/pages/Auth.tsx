@@ -3,12 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
-import { ArrowLeft, Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, Loader2, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import autoaidLogo from '@/assets/autoaid-logo.png';
+
+// Separate schema for forgot password (only email required)
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+});
 
 // Zod validation schema
 const authSchema = z.object({
@@ -20,7 +25,7 @@ const Auth: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, role, isLoading: authLoading } = useAuth();
   
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot-password'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -85,8 +90,8 @@ const Auth: React.FC = () => {
           return;
         }
 
-        toast.success('Account created successfully!');
-        // Auth state change will handle redirect
+        toast.success('Account created! Please check your email to verify your account.');
+        // Stay on auth page until they verify
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -94,7 +99,9 @@ const Auth: React.FC = () => {
         });
 
         if (error) {
-          if (error.message.includes('Invalid login credentials')) {
+          if (error.message.includes('Email not confirmed')) {
+            toast.error('Please verify your email before logging in. Check your inbox.');
+          } else if (error.message.includes('Invalid login credentials')) {
             toast.error('Invalid email or password. Please try again.');
           } else {
             toast.error(error.message);
@@ -105,6 +112,40 @@ const Auth: React.FC = () => {
         toast.success('Welcome back!');
         // Auth state change will handle redirect
       }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      forgotPasswordSchema.parse({ email });
+      setErrors({});
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setErrors({ email: error.errors[0]?.message });
+      }
+      return;
+    }
+    
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success('Password reset link sent! Check your email.');
+      setMode('login');
     } catch (error) {
       toast.error('Something went wrong. Please try again.');
     } finally {
@@ -169,98 +210,157 @@ const Auth: React.FC = () => {
         {/* Title */}
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="text-2xl font-bold text-foreground mb-2">
-            {mode === 'login' ? 'Welcome Back' : 'Create Account'}
+            {mode === 'login' ? 'Welcome Back' : mode === 'signup' ? 'Create Account' : 'Reset Password'}
           </h1>
           <p className="text-muted-foreground text-sm">
             {mode === 'login' 
               ? 'Sign in to continue to AutoAid' 
-              : 'Sign up to get started with AutoAid'}
+              : mode === 'signup'
+              ? 'Sign up to get started with AutoAid'
+              : 'Enter your email to receive a reset link'}
           </p>
         </div>
 
-        {/* Mode Toggle */}
-        <div className="flex bg-muted rounded-xl p-1 mb-6 animate-fade-in">
-          <button
-            onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              mode === 'login'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground'
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => setMode('signup')}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              mode === 'signup'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground'
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        {/* Email + Password Form */}
-        <form onSubmit={handleEmailAuth} className="space-y-4 animate-fade-in">
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-foreground">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
-                disabled={isLoading}
-              />
-            </div>
-            {errors.email && (
-              <p className="text-xs text-destructive">{errors.email}</p>
-            )}
+        {/* Mode Toggle - hide on forgot password */}
+        {mode !== 'forgot-password' && (
+          <div className="flex bg-muted rounded-xl p-1 mb-6 animate-fade-in">
+            <button
+              onClick={() => setMode('login')}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                mode === 'login'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                mode === 'signup'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-foreground">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`pl-10 pr-10 ${errors.password ? 'border-destructive' : ''}`}
-                disabled={isLoading}
-              />
+        {/* Forgot Password Form */}
+        {mode === 'forgot-password' ? (
+          <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
+                  disabled={isLoading}
+                />
+              </div>
+              {errors.email && (
+                <p className="text-xs text-destructive">{errors.email}</p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Send Reset Link
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="w-full text-sm text-primary hover:underline flex items-center justify-center gap-1"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Back to Login
+            </button>
+          </form>
+        ) : (
+          /* Email + Password Form */
+          <form onSubmit={handleEmailAuth} className="space-y-4 animate-fade-in">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`pl-10 ${errors.email ? 'border-destructive' : ''}`}
+                  disabled={isLoading}
+                />
+              </div>
+              {errors.email && (
+                <p className="text-xs text-destructive">{errors.email}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-foreground">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`pl-10 pr-10 ${errors.password ? 'border-destructive' : ''}`}
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="text-xs text-destructive">{errors.password}</p>
+              )}
+            </div>
+
+            {mode === 'login' && (
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                onClick={() => setMode('forgot-password')}
+                className="text-sm text-primary hover:underline"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                Forgot password?
               </button>
-            </div>
-            {errors.password && (
-              <p className="text-xs text-destructive">{errors.password}</p>
             )}
-          </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : null}
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              {mode === 'login' ? 'Sign In' : 'Create Account'}
+            </Button>
+          </form>
+        )}
 
         {/* Divider */}
         <div className="flex items-center gap-4 my-6 animate-fade-in">
