@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import { Loader2, MapPin, Navigation, RefreshCw, Star, Phone, Wrench } from 'lucide-react';
+import { Loader2, MapPin, Navigation, RefreshCw, Phone, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -62,7 +62,7 @@ const NearbyMechanicsMap: React.FC = () => {
     fetchToken();
   }, []);
 
-  // Fetch nearby mechanics
+  // Fetch all registered mechanics (not just available ones)
   useEffect(() => {
     const fetchMechanics = async () => {
       if (!latitude || !longitude) return;
@@ -71,8 +71,7 @@ const NearbyMechanicsMap: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from('mechanics')
-          .select('*')
-          .eq('is_available', true);
+          .select('*');
 
         if (error) throw error;
 
@@ -87,7 +86,7 @@ const NearbyMechanicsMap: React.FC = () => {
         setMechanics(mechanicsWithDistance);
       } catch (error) {
         console.error('Error fetching mechanics:', error);
-        toast.error('Failed to load nearby mechanics');
+        toast.error('Failed to load mechanics');
       } finally {
         setLoading(false);
       }
@@ -253,21 +252,13 @@ const NearbyMechanicsMap: React.FC = () => {
                     <span>{selectedMechanic.address}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-4 mt-2">
-                  {selectedMechanic.rating > 0 && (
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium">{selectedMechanic.rating}</span>
-                    </div>
-                  )}
-                  {selectedMechanic.distance && (
-                    <span className="text-sm text-muted-foreground">
-                      {selectedMechanic.distance < 1
-                        ? `${(selectedMechanic.distance * 1000).toFixed(0)}m away`
-                        : `${selectedMechanic.distance.toFixed(1)}km away`}
-                    </span>
-                  )}
-                </div>
+                {selectedMechanic.distance && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {selectedMechanic.distance < 1
+                      ? `${(selectedMechanic.distance * 1000).toFixed(0)}m away`
+                      : `${selectedMechanic.distance.toFixed(1)}km away`}
+                  </p>
+                )}
               </div>
               <Button
                 size="icon"

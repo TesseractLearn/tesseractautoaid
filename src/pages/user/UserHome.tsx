@@ -6,12 +6,9 @@ import {
   MapPin, 
   Search, 
   Bell, 
-  AlertTriangle,
   ChevronRight,
-  Star,
   Clock,
-  Shield,
-  Zap
+  Wrench
 } from 'lucide-react';
 import { 
   PunctureIcon, 
@@ -56,11 +53,6 @@ const UserHome: React.FC = () => {
     { icon: <WrenchIcon size={24} />, name: 'General', description: 'All repairs', path: 'general' },
   ];
 
-  const nearbyMechanics = [
-    { id: 1, name: 'Raju Kumar', rating: 4.8, jobs: 234, distance: '0.8 km', eta: '8 min', speciality: 'Engine Expert' },
-    { id: 2, name: 'Suresh Sharma', rating: 4.6, jobs: 156, distance: '1.2 km', eta: '12 min', speciality: 'Battery Specialist' },
-    { id: 3, name: 'Amit Patel', rating: 4.9, jobs: 312, distance: '1.5 km', eta: '15 min', speciality: 'All Rounder' },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -89,16 +81,16 @@ const UserHome: React.FC = () => {
         </div>
       </header>
 
-      {/* Emergency Button */}
+      {/* Find Mechanics Button - Uber style */}
       <div className="px-4 -mt-4 relative z-10">
         <Button
-          variant="emergency"
+          variant="default"
           size="lg"
-          className="w-full shadow-xl"
-          onClick={() => navigate('/user/emergency')}
+          className="w-full shadow-xl bg-primary hover:bg-primary/90"
+          onClick={() => navigate('/user/find-mechanics')}
         >
-          <AlertTriangle className="w-5 h-5" />
-          Emergency Roadside Assistance
+          <Wrench className="w-5 h-5" />
+          Find Mechanics
         </Button>
       </div>
 
@@ -126,73 +118,6 @@ const UserHome: React.FC = () => {
           </div>
         </section>
 
-        {/* Quick Stats */}
-        <section className="grid grid-cols-3 gap-3">
-          <div className="bg-card rounded-xl p-3 border border-border/50 text-center">
-            <Shield className="w-5 h-5 text-success mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">500+</p>
-            <p className="text-xs text-muted-foreground">Verified Mechanics</p>
-          </div>
-          <div className="bg-card rounded-xl p-3 border border-border/50 text-center">
-            <Zap className="w-5 h-5 text-warning mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">10 min</p>
-            <p className="text-xs text-muted-foreground">Avg. Response</p>
-          </div>
-          <div className="bg-card rounded-xl p-3 border border-border/50 text-center">
-            <Star className="w-5 h-5 text-primary mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">4.8</p>
-            <p className="text-xs text-muted-foreground">User Rating</p>
-          </div>
-        </section>
-
-        {/* Nearby Mechanics */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground">Nearby Mechanics</h2>
-            <button 
-              onClick={() => navigate('/user/find-mechanics')}
-              className="text-sm text-primary font-medium flex items-center gap-1"
-            >
-              View map <MapPin className="w-4 h-4" />
-            </button>
-          </div>
-          
-          <div className="space-y-3">
-            {nearbyMechanics.map((mechanic, index) => (
-              <button
-                key={mechanic.id}
-                className="w-full bg-card rounded-xl p-4 border border-border/50 flex items-center gap-4 hover:shadow-md transition-shadow animate-fade-in"
-                style={{ animationDelay: `${index * 0.1}s` }}
-                onClick={() => navigate(`/user/mechanic/${mechanic.id}`)}
-              >
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <img 
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${mechanic.name}`}
-                    alt={mechanic.name}
-                    className="w-12 h-12 rounded-full"
-                  />
-                </div>
-                <div className="flex-1 text-left">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground">{mechanic.name}</h3>
-                    <span className="flex items-center gap-0.5 text-xs bg-success/10 text-success px-2 py-0.5 rounded-full">
-                      <Star className="w-3 h-3 fill-current" />
-                      {mechanic.rating}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{mechanic.speciality} • {mechanic.jobs} jobs</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-foreground">{mechanic.distance}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {mechanic.eta}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
 
         {/* Recent Activity */}
         <section>
