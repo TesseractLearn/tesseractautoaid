@@ -3,63 +3,78 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Phone, Shield, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, CheckCircle, Loader2 } from 'lucide-react';
 import autoaidLogo from '@/assets/autoaid-logo.png';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { role, login, isLoading } = useAuth();
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const { role } = useAuth();
+  const [step, setStep] = useState<'email' | 'sent'>('email');
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length >= 10) {
-      setStep('otp');
-      setError('');
-    } else {
-      setError('Please enter a valid phone number');
-    }
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) return;
+    setError('');
     
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`);
-      prevInput?.focus();
-    }
-  };
-
-  const handleOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const otpValue = otp.join('');
-    
-    if (otpValue.length !== 6) {
-      setError('Please enter the complete OTP');
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
-    const success = await login(phone, otpValue);
-    
-    if (success) {
-      navigate(role === 'mechanic' ? '/mechanic' : '/user');
-    } else {
-      setError('Invalid OTP. Please try again. (Use 123456 for demo)');
+    setIsLoading(true);
+
+    try {
+      const redirectUrl = `${window.location.origin}${role === 'mechanic' ? '/mechanic' : '/user'}`;
+      
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (authError) {
+        setError(authError.message);
+        toast.error(authError.message);
+      } else {
+        setStep('sent');
+        toast.success('Magic link sent! Check your email.');
+      }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setIsLoading(true);
+    try {
+      const redirectUrl = `${window.location.origin}${role === 'mechanic' ? '/mechanic' : '/user'}`;
+      
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
+      });
+
+      if (authError) {
+        toast.error(authError.message);
+      } else {
+        toast.success('Magic link resent! Check your email.');
+      }
+    } catch (err) {
+      toast.error('Failed to resend. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -71,7 +86,7 @@ const Login: React.FC = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => step === 'otp' ? setStep('phone') : navigate('/')}
+            onClick={() => step === 'sent' ? setStep('email') : navigate('/')}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -87,88 +102,35 @@ const Login: React.FC = () => {
       {/* Main Content */}
       <main className="flex-1 px-4 py-8 flex flex-col">
         <div className="max-w-md mx-auto w-full flex-1 flex flex-col">
-          {step === 'phone' ? (
+          {step === 'email' ? (
             <div className="animate-fade-in">
               <div className="text-center mb-8">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Phone className="w-8 h-8 text-primary" />
+                  <Mail className="w-8 h-8 text-primary" />
                 </div>
                 <h1 className="text-2xl font-bold text-foreground mb-2">
-                  Enter your phone number
+                  Enter your email
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  We'll send you a verification code
+                  We'll send you a magic link to sign in
                 </p>
               </div>
 
-              <form onSubmit={handlePhoneSubmit} className="space-y-6">
+              <form onSubmit={handleEmailSubmit} className="space-y-6">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Phone Number
+                    Email Address
                   </label>
-                  <div className="flex gap-2">
-                    <div className="flex items-center justify-center px-3 bg-secondary rounded-xl border border-border text-sm font-medium">
-                      +91
-                    </div>
-                    <Input
-                      type="tel"
-                      placeholder="Enter 10-digit number"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      className="flex-1 h-12 rounded-xl text-base"
-                    />
-                  </div>
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-12 rounded-xl text-base"
+                    disabled={isLoading}
+                  />
                   {error && (
                     <p className="text-destructive text-sm mt-2">{error}</p>
-                  )}
-                </div>
-
-                <Button
-                  type="submit"
-                  variant="hero"
-                  size="lg"
-                  className="w-full"
-                >
-                  Continue
-                </Button>
-              </form>
-            </div>
-          ) : (
-            <div className="animate-fade-in">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-8 h-8 text-success" />
-                </div>
-                <h1 className="text-2xl font-bold text-foreground mb-2">
-                  Verify OTP
-                </h1>
-                <p className="text-muted-foreground text-sm">
-                  Enter the 6-digit code sent to +91 {phone}
-                </p>
-              </div>
-
-              <form onSubmit={handleOtpSubmit} className="space-y-6">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block text-center">
-                    Enter OTP
-                  </label>
-                  <div className="flex justify-center gap-2">
-                    {otp.map((digit, index) => (
-                      <Input
-                        key={index}
-                        id={`otp-${index}`}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(index, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                        className="w-12 h-14 text-center text-xl font-bold rounded-xl"
-                      />
-                    ))}
-                  </div>
-                  {error && (
-                    <p className="text-destructive text-sm mt-3 text-center">{error}</p>
                   )}
                 </div>
 
@@ -182,31 +144,74 @@ const Login: React.FC = () => {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Verifying...
+                      Sending...
                     </>
                   ) : (
-                    'Verify & Continue'
+                    'Send Magic Link'
                   )}
                 </Button>
-
-                <div className="text-center">
-                  <button
-                    type="button"
-                    className="text-sm text-primary hover:underline"
-                    onClick={() => setOtp(['', '', '', '', '', ''])}
-                  >
-                    Resend OTP
-                  </button>
-                </div>
               </form>
+            </div>
+          ) : (
+            <div className="animate-fade-in">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-success" />
+                </div>
+                <h1 className="text-2xl font-bold text-foreground mb-2">
+                  Check your email
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                  We've sent a magic link to
+                </p>
+                <p className="text-foreground font-medium mt-1">
+                  {email}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-secondary/50 rounded-xl p-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Click the link in the email to sign in. The link will expire in 1 hour.
+                  </p>
+                </div>
+
+                <div className="text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Didn't receive the email?
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleResend}
+                    disabled={isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Resending...
+                      </>
+                    ) : (
+                      'Resend Magic Link'
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setStep('email')}
+                    className="w-full"
+                  >
+                    Use a different email
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Demo Hint */}
+          {/* Info */}
           <div className="mt-auto pt-8">
             <div className="bg-secondary/50 rounded-xl p-4 text-center">
               <p className="text-xs text-muted-foreground">
-                <strong>Demo Mode:</strong> Use OTP <strong className="text-primary">123456</strong> to login
+                By continuing, you agree to our Terms of Service and Privacy Policy
               </p>
             </div>
           </div>
