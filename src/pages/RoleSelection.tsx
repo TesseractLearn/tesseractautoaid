@@ -32,14 +32,11 @@ const RoleSelection: React.FC = () => {
       {/* Header */}
       <header className={`safe-area-inset-top py-8 px-4 relative z-10 transition-all duration-700 ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-8'}`}>
         <div className="flex flex-col items-center justify-center">
-          <div className="relative">
-            <div className="absolute inset-0 bg-white/20 rounded-full blur-xl animate-pulse" />
-            <img 
-              src={autoaidLogo} 
-              alt="AutoAid" 
-              className="h-40 w-40 relative z-10 drop-shadow-2xl"
-            />
-          </div>
+          <img 
+            src={autoaidLogo} 
+            alt="AutoAid" 
+            className="h-20 w-auto rounded-xl drop-shadow-2xl"
+          />
         </div>
       </header>
 
