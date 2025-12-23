@@ -11,7 +11,7 @@ const RoleSelection: React.FC = () => {
 
   const handleRoleSelect = (role: 'user' | 'mechanic') => {
     setRole(role);
-    navigate('/login');
+    navigate('/auth');
   };
 
   return (
