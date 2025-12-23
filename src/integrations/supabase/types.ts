@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      bookings: {
+        Row: {
+          address: string | null
+          completed_at: string | null
+          created_at: string
+          estimated_price: number | null
+          final_price: number | null
+          id: string
+          issue_description: string | null
+          latitude: number
+          longitude: number
+          mechanic_id: string | null
+          service_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          completed_at?: string | null
+          created_at?: string
+          estimated_price?: number | null
+          final_price?: number | null
+          id?: string
+          issue_description?: string | null
+          latitude: number
+          longitude: number
+          mechanic_id?: string | null
+          service_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          completed_at?: string | null
+          created_at?: string
+          estimated_price?: number | null
+          final_price?: number | null
+          id?: string
+          issue_description?: string | null
+          latitude?: number
+          longitude?: number
+          mechanic_id?: string | null
+          service_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mechanics: {
         Row: {
           address: string | null
