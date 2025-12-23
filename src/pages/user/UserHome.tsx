@@ -149,7 +149,10 @@ const UserHome: React.FC = () => {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">Nearby Mechanics</h2>
-            <button className="text-sm text-primary font-medium flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/user/find-mechanics')}
+              className="text-sm text-primary font-medium flex items-center gap-1"
+            >
               View map <MapPin className="w-4 h-4" />
             </button>
           </div>

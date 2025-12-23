@@ -21,6 +21,7 @@ import UserTrack from "./pages/user/UserTrack";
 import UserHistory from "./pages/user/UserHistory";
 import UserProfile from "./pages/user/UserProfile";
 import BookService from "./pages/user/BookService";
+import FindMechanics from "./pages/user/FindMechanics";
 
 // Mechanic Pages
 import MechanicHome from "./pages/mechanic/MechanicHome";
@@ -67,6 +68,7 @@ const App = () => (
               <Route index element={<UserHome />} />
               <Route path="services" element={<UserServices />} />
               <Route path="book/:serviceType" element={<BookService />} />
+              <Route path="find-mechanics" element={<FindMechanics />} />
               <Route path="track" element={<UserTrack />} />
               <Route path="history" element={<UserHistory />} />
               <Route path="profile" element={<UserProfile />} />
