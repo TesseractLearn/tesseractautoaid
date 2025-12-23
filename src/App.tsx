@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
 // Pages
 import RoleSelection from "./pages/RoleSelection";
-import Login from "./pages/Login";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 // Layouts
@@ -56,7 +56,7 @@ const App = () => (
           <Routes>
             {/* Auth Routes */}
             <Route path="/" element={<RoleSelection />} />
-            <Route path="/login" element={<Login />} />
+            <Route path="/auth" element={<Auth />} />
 
             {/* User Routes */}
             <Route path="/user" element={
