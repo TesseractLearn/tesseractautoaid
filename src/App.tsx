@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
 // Pages
+import SplashScreen from "./pages/SplashScreen";
 import RoleSelection from "./pages/RoleSelection";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -55,8 +56,9 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Auth Routes */}
-            <Route path="/" element={<RoleSelection />} />
+            {/* Splash & Auth Routes */}
+            <Route path="/" element={<SplashScreen />} />
+            <Route path="/role-selection" element={<RoleSelection />} />
             <Route path="/auth" element={<Auth />} />
 
             {/* User Routes */}
