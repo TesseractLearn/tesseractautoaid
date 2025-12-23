@@ -37,14 +37,9 @@ const SplashScreen: React.FC = () => {
           <img 
             src={autoaidLogo} 
             alt="AutoAid" 
-            className="w-32 h-32 object-contain drop-shadow-2xl"
+            className="w-64 h-64 object-contain drop-shadow-2xl"
           />
         </div>
-        
-        {/* App Name */}
-        <h1 className="text-5xl font-bold text-white mb-4 animate-fade-in tracking-tight">
-          AutoAid
-        </h1>
         
         {/* Tagline */}
         <p className="text-xl text-white/90 font-medium animate-slide-up italic">
