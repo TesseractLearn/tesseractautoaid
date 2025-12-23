@@ -13,11 +13,8 @@ const SplashScreen: React.FC = () => {
     const timer = setTimeout(() => {
       setFadeOut(true);
       setTimeout(() => {
-        if (user) {
-          navigate('/role-selection');
-        } else {
-          navigate('/auth');
-        }
+        // Always go to role selection after splash
+        navigate('/role-selection');
       }, 500);
     }, 2500);
 
