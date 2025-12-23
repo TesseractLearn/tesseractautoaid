@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      mechanics: {
+        Row: {
+          address: string | null
+          created_at: string
+          full_name: string
+          id: string
+          is_available: boolean | null
+          latitude: number
+          longitude: number
+          phone: string | null
+          rating: number | null
+          specialization: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          is_available?: boolean | null
+          latitude: number
+          longitude: number
+          phone?: string | null
+          rating?: number | null
+          specialization?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_available?: boolean | null
+          latitude?: number
+          longitude?: number
+          phone?: string | null
+          rating?: number | null
+          specialization?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
