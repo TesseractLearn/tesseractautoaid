@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
-import { ArrowLeft, Mail, Lock, Loader2, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, Loader2, Eye, EyeOff, ArrowRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,8 +15,15 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().email('Please enter a valid email address'),
 });
 
-// Zod validation schema
-const authSchema = z.object({
+// Zod validation schema for login
+const loginSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
+// Zod validation schema for signup (includes name)
+const signupSchema = z.object({
+  fullName: z.string().trim().min(2, 'Name must be at least 2 characters'),
   email: z.string().trim().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
@@ -26,11 +33,12 @@ const Auth: React.FC = () => {
   const { isAuthenticated, role, isLoading: authLoading } = useAuth();
   
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot-password'>('login');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ fullName?: string; email?: string; password?: string }>({});
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -47,13 +55,18 @@ const Auth: React.FC = () => {
 
   const validateForm = (): boolean => {
     try {
-      authSchema.parse({ email, password });
+      if (mode === 'signup') {
+        signupSchema.parse({ fullName, email, password });
+      } else {
+        loginSchema.parse({ email, password });
+      }
       setErrors({});
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const fieldErrors: { email?: string; password?: string } = {};
+        const fieldErrors: { fullName?: string; email?: string; password?: string } = {};
         error.errors.forEach((err) => {
+          if (err.path[0] === 'fullName') fieldErrors.fullName = err.message;
           if (err.path[0] === 'email') fieldErrors.email = err.message;
           if (err.path[0] === 'password') fieldErrors.password = err.message;
         });
@@ -77,6 +90,9 @@ const Auth: React.FC = () => {
           password,
           options: {
             emailRedirectTo: window.location.origin,
+            data: {
+              full_name: fullName.trim(),
+            },
           },
         });
 
@@ -293,6 +309,27 @@ const Auth: React.FC = () => {
         ) : (
           /* Email + Password Form */
           <form onSubmit={handleEmailAuth} className="space-y-4 animate-fade-in">
+            {mode === 'signup' && (
+              <div className="space-y-2">
+                <Label htmlFor="fullName" className="text-foreground">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Enter your full name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className={`pl-10 ${errors.fullName ? 'border-destructive' : ''}`}
+                    disabled={isLoading}
+                  />
+                </div>
+                {errors.fullName && (
+                  <p className="text-xs text-destructive">{errors.fullName}</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">Email</Label>
               <div className="relative">
