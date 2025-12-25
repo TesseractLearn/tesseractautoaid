@@ -560,9 +560,12 @@ const Auth: React.FC = () => {
         {/* Choose Mode Step */}
         {step === 'choose-mode' && (
           <div className="flex-1 flex flex-col animate-fade-in">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+            <h1 className="text-3xl font-bold text-foreground mb-1">
               Welcome to AutoAid
             </h1>
+            <p className="text-primary font-medium italic mb-2">
+              Because Breakdowns Can't Wait
+            </p>
             <p className="text-muted-foreground mb-8">
               Get roadside assistance anytime, anywhere
             </p>
