@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { Button } from '@/components/ui/button';
 import { 
   MapPin, 
-  Search, 
   Bell, 
   ChevronRight,
   Clock,
@@ -14,8 +14,7 @@ import {
   PunctureIcon, 
   TowingIcon, 
   EngineIcon, 
-  BatteryIcon, 
-  EmergencyIcon,
+  BatteryIcon,
   WrenchIcon 
 } from '@/components/icons/ServiceIcons';
 import autoaidLogo from '@/assets/autoaid-logo.png';
@@ -43,8 +42,11 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ icon, name, description, onCl
 const UserHome: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { displayName, isLoading: profileLoading } = useUserProfile();
   const [location] = useState('Bandra West, Mumbai');
 
+  // Get first name for greeting
+  const firstName = displayName?.split(' ')[0] || null;
   const services = [
     { icon: <PunctureIcon size={24} />, name: 'Puncture', description: 'Flat tire fix', path: 'puncture' },
     { icon: <BatteryIcon size={24} />, name: 'Battery', description: 'Jump start', path: 'battery' },
@@ -60,9 +62,14 @@ const UserHome: React.FC = () => {
       <header className="bg-gradient-hero text-primary-foreground safe-area-inset-top">
         <div className="px-4 pt-4 pb-6">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <img src={autoaidLogo} alt="AutoAid" className="h-8 w-8" />
-              <span className="font-bold text-lg">AutoAid</span>
+            <div className="flex flex-col">
+              <span className="text-sm text-primary-foreground/80">
+                {profileLoading ? 'Welcome' : firstName ? `Hi, ${firstName}` : 'Welcome'}
+              </span>
+              <div className="flex items-center gap-2">
+                <img src={autoaidLogo} alt="AutoAid" className="h-8 w-8" />
+                <span className="font-bold text-lg">AutoAid</span>
+              </div>
             </div>
             <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
               <Bell className="w-5 h-5" />
