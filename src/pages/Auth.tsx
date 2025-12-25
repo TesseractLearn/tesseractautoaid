@@ -84,34 +84,44 @@ const Auth: React.FC = () => {
 
     try {
       // Try to sign in with a dummy password to check if user exists
+      // Supabase returns different errors for existing vs non-existing users
       const { error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
-        password: 'dummy-check-password-12345',
+        password: '__check_user_exists_dummy_pwd_' + Date.now(),
       });
 
       if (error) {
         const msg = error.message.toLowerCase();
         
         if (msg.includes('invalid login credentials')) {
-          // User exists but wrong password - go to login
+          // This means user EXISTS but password is wrong
+          // Supabase returns this for existing users with wrong passwords
           setIsExistingUser(true);
           setStep('login-password');
         } else if (msg.includes('email not confirmed')) {
-          // User exists but not verified
+          // User exists but email not verified
           setIsExistingUser(true);
           setStep('verification');
           setResendCooldown(30);
-        } else {
+          toast.info('Please verify your email to continue.');
+        } else if (msg.includes('user not found') || msg.includes('no user')) {
           // User doesn't exist - go to signup
+          setIsExistingUser(false);
+          setStep('signup-details');
+        } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
+          setError('Too many attempts. Please wait a moment.');
+        } else {
+          // For any other error, let user choose their path
+          // Default to signup for new users
           setIsExistingUser(false);
           setStep('signup-details');
         }
       } else {
-        // Unlikely but handle successful login
+        // Somehow logged in (very unlikely with random password)
         toast.success('Welcome back!');
       }
     } catch (err) {
-      // If error, assume new user
+      // Network or other error - let user try signup
       setIsExistingUser(false);
       setStep('signup-details');
     } finally {
@@ -123,6 +133,7 @@ const Auth: React.FC = () => {
     e.preventDefault();
     setError('');
     
+    // Validate password format first
     try {
       passwordSchema.parse(password);
     } catch (e) {
@@ -135,29 +146,52 @@ const Auth: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
       if (error) {
         const msg = error.message.toLowerCase();
         
+        // Clear password but keep email for retry
+        setPassword('');
+        
         if (msg.includes('invalid login credentials')) {
-          setError('Incorrect password');
+          // Since we verified email exists in previous step, this means wrong password
+          if (isExistingUser) {
+            setError('Incorrect password. Please try again.');
+          } else {
+            // Edge case: user doesn't exist
+            setError('No account found with this email.');
+            setTimeout(() => {
+              setStep('signup-details');
+            }, 1500);
+          }
         } else if (msg.includes('email not confirmed')) {
           setStep('verification');
           setResendCooldown(30);
-        } else if (msg.includes('too many requests')) {
-          setError('Too many attempts. Please wait a moment.');
+          toast.info('Please verify your email before signing in.');
+        } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
+          setError('Too many login attempts. Please wait a moment and try again.');
+        } else if (msg.includes('user not found')) {
+          setError('No account found with this email.');
+          setTimeout(() => {
+            setStep('signup-details');
+          }, 1500);
         } else {
-          setError('Unable to sign in. Please try again.');
+          // Generic fallback - don't expose internal details
+          setError('Unable to sign in. Please check your credentials.');
         }
         return;
       }
 
       toast.success('Welcome back!');
+      // Auth state change will handle redirect
     } catch (err) {
+      setPassword('');
       setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
