@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 interface UserProfile {
   full_name: string | null;
   phone: string | null;
+  avatar_url?: string | null;
 }
 
 export const useUserProfile = () => {
@@ -48,11 +49,20 @@ export const useUserProfile = () => {
     }
   };
 
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || null;
+  const displayName = profile?.full_name || 
+                      user?.user_metadata?.full_name || 
+                      user?.user_metadata?.name || 
+                      null;
+  
+  // Get avatar URL from Google OAuth or generate one
+  const avatarUrl = user?.user_metadata?.avatar_url || 
+                    user?.user_metadata?.picture || 
+                    null;
 
   return {
     profile,
     displayName,
+    avatarUrl,
     isLoading,
     refetch: fetchProfile,
   };

@@ -16,7 +16,7 @@ interface Booking {
 const UserProfile: React.FC = () => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  const { profile, displayName, isLoading: profileLoading } = useUserProfile();
+  const { profile, displayName, avatarUrl, isLoading: profileLoading } = useUserProfile();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [vehicleCount, setVehicleCount] = useState(0);
 
@@ -72,9 +72,10 @@ const UserProfile: React.FC = () => {
         {/* Profile Header */}
         <div className="flex items-center gap-4 mb-8">
           <img 
-            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName || 'user'}`}
+            src={avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName || 'user'}`}
             alt="Profile"
-            className="w-16 h-16 rounded-full border-2 border-primary"
+            className="w-16 h-16 rounded-full border-2 border-primary object-cover"
+            referrerPolicy="no-referrer"
           />
           <div>
             <h1 className="text-xl font-bold text-foreground">

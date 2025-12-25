@@ -32,6 +32,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+
+        // Handle profile creation for OAuth users
+        if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
+          // Defer the profile check to avoid Supabase deadlock
+          setTimeout(() => {
+            ensureProfileExists(session.user);
+          }, 0);
+        }
       }
     );
 
@@ -44,6 +52,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Ensure profile exists for OAuth users (Google, etc.)
+  const ensureProfileExists = async (user: User) => {
+    try {
+      // Check if profile already exists
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        // Create profile from OAuth data
+        const fullName = user.user_metadata?.full_name || 
+                         user.user_metadata?.name || 
+                         user.email?.split('@')[0] || 
+                         'User';
+        
+        await supabase
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            full_name: fullName,
+          });
+      }
+    } catch (err) {
+      console.error('Error ensuring profile exists:', err);
+    }
+  };
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
