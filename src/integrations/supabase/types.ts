@@ -118,6 +118,72 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          booking_updates: boolean | null
+          created_at: string
+          id: string
+          mechanic_arrival: boolean | null
+          payment_confirmations: boolean | null
+          promotional: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          booking_updates?: boolean | null
+          created_at?: string
+          id?: string
+          mechanic_arrival?: boolean | null
+          payment_confirmations?: boolean | null
+          promotional?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          booking_updates?: boolean | null
+          created_at?: string
+          id?: string
+          mechanic_arrival?: boolean | null
+          payment_confirmations?: boolean | null
+          promotional?: boolean | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      payment_methods: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          is_default: boolean | null
+          masked_identifier: string
+          method_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          is_default?: boolean | null
+          masked_identifier: string
+          method_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_default?: boolean | null
+          masked_identifier?: string
+          method_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -142,6 +208,45 @@ export type Database = {
           phone?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          brand: string
+          created_at: string
+          fuel_type: string
+          id: string
+          is_default: boolean | null
+          model: string
+          updated_at: string
+          user_id: string
+          vehicle_number: string
+          vehicle_type: string
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          fuel_type: string
+          id?: string
+          is_default?: boolean | null
+          model: string
+          updated_at?: string
+          user_id: string
+          vehicle_number: string
+          vehicle_type: string
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          fuel_type?: string
+          id?: string
+          is_default?: boolean | null
+          model?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_number?: string
+          vehicle_type?: string
         }
         Relationships: []
       }
