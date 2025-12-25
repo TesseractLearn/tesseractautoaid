@@ -163,8 +163,27 @@ const Auth: React.FC = () => {
         }
 
         // Check if email confirmation is required
-        // When email confirmation is enabled, user will have identities but email_confirmed_at will be null
         if (data.user && !data.user.email_confirmed_at) {
+          // Send custom verification email via Resend
+          const verificationUrl = `${window.location.origin}/auth`;
+          
+          try {
+            const { error: emailError } = await supabase.functions.invoke('send-verification-email', {
+              body: {
+                email: normalizedEmail,
+                name: fullName.trim(),
+                verificationUrl,
+              },
+            });
+
+            if (emailError) {
+              console.error('Failed to send custom verification email:', emailError);
+              // Fall back to Supabase's built-in email (already sent during signUp)
+            }
+          } catch (emailErr) {
+            console.error('Error calling verification email function:', emailErr);
+          }
+
           setVerificationEmail(normalizedEmail);
           setVerificationSent(true);
           toast.success('Verification email sent! Please check your inbox to verify your account.');
@@ -206,6 +225,7 @@ const Auth: React.FC = () => {
     
     setIsLoading(true);
     try {
+      // First resend via Supabase to generate new token
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: verificationEmail,
@@ -217,6 +237,20 @@ const Auth: React.FC = () => {
       if (error) {
         toast.error(error.message);
         return;
+      }
+
+      // Also send custom email via Resend for better deliverability
+      const verificationUrl = `${window.location.origin}/auth`;
+      
+      try {
+        await supabase.functions.invoke('send-verification-email', {
+          body: {
+            email: verificationEmail,
+            verificationUrl,
+          },
+        });
+      } catch (emailErr) {
+        console.error('Error calling verification email function:', emailErr);
       }
 
       toast.success('Verification email resent! Please check your inbox.');
