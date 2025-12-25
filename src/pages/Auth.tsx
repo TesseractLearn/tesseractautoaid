@@ -14,7 +14,7 @@ const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email a
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters').max(72);
 const nameSchema = z.string().trim().min(2, 'Name must be at least 2 characters').max(100);
 
-type AuthStep = 'email' | 'login-password' | 'signup-details' | 'verification' | 'forgot-password' | 'reset-password' | 'reset-sent' | 'reset-expired';
+type AuthStep = 'choose-mode' | 'login-email' | 'login-password' | 'signup-email' | 'signup-details' | 'verification' | 'forgot-password' | 'reset-password' | 'reset-sent' | 'reset-expired';
 
 // Google Icon Component
 const GoogleIcon = () => (
@@ -43,7 +43,7 @@ const Auth: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, role, isLoading: authLoading } = useAuth();
   
-  const [step, setStep] = useState<AuthStep>('email');
+  const [step, setStep] = useState<AuthStep>('choose-mode');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -395,7 +395,7 @@ const Auth: React.FC = () => {
       setEmail('');
       
       toast.success('Password reset successful! Please log in with your new password.');
-      setStep('email');
+      setStep('choose-mode');
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -508,16 +508,22 @@ const Auth: React.FC = () => {
     setPassword('');
     setConfirmPassword('');
     
-    if (step === 'verification' || step === 'login-password' || step === 'signup-details') {
-      setStep('email');
+    if (step === 'login-password') {
+      setStep('login-email');
+    } else if (step === 'login-email' || step === 'signup-email') {
+      setStep('choose-mode');
+    } else if (step === 'signup-details') {
+      setStep('signup-email');
+    } else if (step === 'verification') {
+      setStep('choose-mode');
     } else if (step === 'forgot-password' || step === 'reset-sent') {
       setStep('login-password');
     } else if (step === 'reset-password') {
       // Can't go back from reset - must complete or get new link
-      setStep('email');
+      setStep('choose-mode');
       setIsResetMode(false);
     } else if (step === 'reset-expired') {
-      setStep('email');
+      setStep('choose-mode');
     } else {
       navigate('/');
     }
@@ -551,14 +557,14 @@ const Auth: React.FC = () => {
           <span className="text-2xl font-bold text-foreground">AutoAid</span>
         </div>
 
-        {/* Email Step */}
-        {step === 'email' && (
+        {/* Choose Mode Step */}
+        {step === 'choose-mode' && (
           <div className="flex-1 flex flex-col animate-fade-in">
             <h1 className="text-3xl font-bold text-foreground mb-2">
               Welcome to AutoAid
             </h1>
             <p className="text-muted-foreground mb-8">
-              Sign in or create an account
+              Get roadside assistance anytime, anywhere
             </p>
 
             {/* Google Sign In Button */}
@@ -586,8 +592,43 @@ const Auth: React.FC = () => {
               <div className="flex-1 h-px bg-border" />
             </div>
 
-            {/* Email Form */}
-            <form onSubmit={handleEmailSubmit}>
+            {/* Login / Signup Buttons */}
+            <Button
+              type="button"
+              className="w-full h-14 text-lg font-semibold mb-3"
+              onClick={() => setStep('login-email')}
+            >
+              Log in with Email
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-14 text-lg font-semibold border-2"
+              onClick={() => setStep('signup-email')}
+            >
+              Create Account
+            </Button>
+
+            {error && <p className="text-destructive text-sm mt-4 text-center">{error}</p>}
+          </div>
+        )}
+
+        {/* Login Email Step */}
+        {step === 'login-email' && (
+          <div className="flex-1 flex flex-col animate-fade-in">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Log in
+            </h1>
+            <p className="text-muted-foreground mb-8">
+              Enter your email to continue
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!validateEmail(email.trim().toLowerCase())) return;
+              setStep('login-password');
+            }}>
               <Input
                 type="email"
                 placeholder="Enter your email"
@@ -598,6 +639,7 @@ const Auth: React.FC = () => {
                 }}
                 className={`h-14 text-lg px-4 ${error ? 'border-destructive' : ''}`}
                 autoComplete="email"
+                autoFocus
                 disabled={isLoading}
               />
               {error && <p className="text-destructive text-sm mt-2">{error}</p>}
@@ -606,12 +648,77 @@ const Auth: React.FC = () => {
                 <Button
                   type="submit"
                   className="w-full h-14 text-lg font-semibold"
-                  disabled={!email.trim() || isLoading}
+                  disabled={!email.trim()}
                 >
-                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continue with Email'}
+                  Continue
                 </Button>
               </div>
             </form>
+
+            <p className="text-center text-muted-foreground mt-6">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => setStep('signup-email')}
+                className="text-primary font-medium hover:underline"
+              >
+                Sign up
+              </button>
+            </p>
+          </div>
+        )}
+
+        {/* Signup Email Step */}
+        {step === 'signup-email' && (
+          <div className="flex-1 flex flex-col animate-fade-in">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Create account
+            </h1>
+            <p className="text-muted-foreground mb-8">
+              Enter your email to get started
+            </p>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!validateEmail(email.trim().toLowerCase())) return;
+              setStep('signup-details');
+            }}>
+              <Input
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
+                className={`h-14 text-lg px-4 ${error ? 'border-destructive' : ''}`}
+                autoComplete="email"
+                autoFocus
+                disabled={isLoading}
+              />
+              {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+
+              <div className="mt-6">
+                <Button
+                  type="submit"
+                  className="w-full h-14 text-lg font-semibold"
+                  disabled={!email.trim()}
+                >
+                  Continue
+                </Button>
+              </div>
+            </form>
+
+            <p className="text-center text-muted-foreground mt-6">
+              Already have an account?{' '}
+              <button
+                type="button"
+                onClick={() => setStep('login-email')}
+                className="text-primary font-medium hover:underline"
+              >
+                Log in
+              </button>
+            </p>
           </div>
         )}
 
@@ -758,7 +865,7 @@ const Auth: React.FC = () => {
 
             <button
               onClick={() => {
-                setStep('email');
+                setStep('choose-mode');
                 setError('');
               }}
               className="text-primary text-sm font-medium mt-4 hover:underline"
@@ -870,7 +977,7 @@ const Auth: React.FC = () => {
 
             <button
               onClick={() => {
-                setStep('email');
+                setStep('choose-mode');
                 setError('');
               }}
               className="text-primary text-sm font-medium mt-4 hover:underline"
