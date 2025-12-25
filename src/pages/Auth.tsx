@@ -223,10 +223,11 @@ const Auth: React.FC = () => {
             setError('No account found with this email.');
             setTimeout(() => setStep('signup-details'), 1500);
           }
-        } else if (msg.includes('email not confirmed')) {
+        } else if (msg.includes('email not confirmed') || msg.includes('email not verified')) {
+          // Strictly block unverified users
           setStep('verification');
-          setResendCooldown(30);
-          toast.info('Please verify your email before signing in.');
+          setResendCooldown(0); // Allow immediate resend
+          setError('Please verify your email to continue. Check your inbox for the verification link.');
         } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
           setError('Too many login attempts. Please wait a moment and try again.');
         } else if (msg.includes('user not found')) {
@@ -292,13 +293,17 @@ const Auth: React.FC = () => {
         return;
       }
 
-      if (data.user && !data.user.email_confirmed_at) {
+      // Always sign out after signup to prevent any auto-login
+      // User MUST verify email before logging in
+      await supabase.auth.signOut();
+
+      if (data.user) {
         try {
           await supabase.functions.invoke('send-verification-email', {
             body: {
               email: normalizedEmail,
               name: fullName.trim(),
-              verificationUrl: `${window.location.origin}/auth`,
+              verificationUrl: `${window.location.origin}/auth?type=signup`,
             },
           });
         } catch (emailErr) {
@@ -307,9 +312,7 @@ const Auth: React.FC = () => {
 
         setStep('verification');
         setResendCooldown(30);
-        toast.success('Account created! Check your email to verify.');
-      } else if (data.session) {
-        toast.success('Account created successfully!');
+        toast.success('Account created! Check your email to verify before logging in.');
       }
     } catch (err) {
       setError('Something went wrong. Please try again.');
@@ -419,11 +422,16 @@ const Auth: React.FC = () => {
         type: 'signup',
         email: email.trim().toLowerCase(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
+          emailRedirectTo: `${window.location.origin}/auth?type=signup`,
         },
       });
 
       if (error) {
+        if (error.message.toLowerCase().includes('already confirmed')) {
+          toast.success('Your email is already verified! You can log in now.');
+          setStep('login-email');
+          return;
+        }
         setError(error.message);
         return;
       }
@@ -433,7 +441,7 @@ const Auth: React.FC = () => {
           body: {
             email: email.trim().toLowerCase(),
             name: fullName.trim() || undefined,
-            verificationUrl: `${window.location.origin}/auth`,
+            verificationUrl: `${window.location.origin}/auth?type=signup`,
           },
         });
       } catch (emailErr) {
