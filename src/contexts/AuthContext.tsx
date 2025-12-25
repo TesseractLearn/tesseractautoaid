@@ -29,6 +29,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // STRICT: Only accept sessions for verified users
+        if (session?.user && !session.user.email_confirmed_at) {
+          // Unverified user - sign them out immediately
+          supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
 
@@ -37,9 +47,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsLoading(false);
         }
 
-        // Handle profile creation for OAuth users
+        // Handle profile creation for OAuth users (OAuth users are auto-verified)
         if (
           session?.user &&
+          session.user.email_confirmed_at &&
           (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')
         ) {
           // Defer the profile check to avoid Supabase deadlock
@@ -50,7 +61,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     );
 
-    // THEN check for existing session (and verify it is still valid)
+    // THEN check for existing session (and verify it is still valid AND verified)
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -63,8 +74,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const { data: { user }, error } = await supabase.auth.getUser();
 
-      // If the account was deleted or the token is invalid, clear local auth state.
-      if (error || !user) {
+      // If the account was deleted, token invalid, or EMAIL NOT VERIFIED - clear auth
+      if (error || !user || !user.email_confirmed_at) {
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
