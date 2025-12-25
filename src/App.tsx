@@ -23,6 +23,11 @@ import UserHistory from "./pages/user/UserHistory";
 import UserProfile from "./pages/user/UserProfile";
 import BookService from "./pages/user/BookService";
 import FindMechanics from "./pages/user/FindMechanics";
+import MyVehicles from "./pages/user/MyVehicles";
+import BookingHistory from "./pages/user/BookingHistory";
+import PaymentMethods from "./pages/user/PaymentMethods";
+import NotificationSettings from "./pages/user/NotificationSettings";
+import PrivacySecurity from "./pages/user/PrivacySecurity";
 
 // Mechanic Pages
 import MechanicHome from "./pages/mechanic/MechanicHome";
@@ -74,6 +79,11 @@ const App = () => (
               <Route path="track" element={<UserTrack />} />
               <Route path="history" element={<UserHistory />} />
               <Route path="profile" element={<UserProfile />} />
+              <Route path="vehicles" element={<MyVehicles />} />
+              <Route path="bookings" element={<BookingHistory />} />
+              <Route path="payments" element={<PaymentMethods />} />
+              <Route path="notifications" element={<NotificationSettings />} />
+              <Route path="security" element={<PrivacySecurity />} />
             </Route>
 
             {/* Mechanic Routes */}
