@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
-import { ArrowLeft, Loader2, Eye, EyeOff, CheckCircle, Mail } from 'lucide-react';
+import { ArrowLeft, Loader2, Eye, EyeOff, CheckCircle, Mail, KeyRound, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -14,26 +14,76 @@ const emailSchema = z.string().trim().toLowerCase().email('Enter a valid email a
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters').max(72);
 const nameSchema = z.string().trim().min(2, 'Name must be at least 2 characters').max(100);
 
-type AuthStep = 'email' | 'login-password' | 'signup-details' | 'verification';
+type AuthStep = 'email' | 'login-password' | 'signup-details' | 'verification' | 'forgot-password' | 'reset-password' | 'reset-sent' | 'reset-expired';
 
 const Auth: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, role, isLoading: authLoading } = useAuth();
   
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isExistingUser, setIsExistingUser] = useState(false);
+  const [isResetMode, setIsResetMode] = useState(false);
 
-  // Redirect if already authenticated
+  // Handle password reset link detection and auth events
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    const mode = searchParams.get('mode');
+    const type = searchParams.get('type');
+    const errorCode = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    
+    // Handle error from reset link (expired/invalid)
+    if (errorCode) {
+      const desc = errorDescription?.toLowerCase() || '';
+      if (desc.includes('expired') || desc.includes('invalid') || errorCode === 'access_denied') {
+        setStep('reset-expired');
+        // Clear error params
+        setSearchParams({}, { replace: true });
+        return;
+      }
+    }
+
+    // Handle email confirmation
+    if (type === 'signup' || type === 'email_change') {
+      toast.success('Email verified successfully! You can now log in.');
+      setSearchParams({}, { replace: true });
+    }
+
+    // Listen for auth events to detect recovery (password reset)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // User clicked the reset link and Supabase has exchanged the token
+        setIsResetMode(true);
+        setStep('reset-password');
+        // Clear URL params
+        setSearchParams({}, { replace: true });
+      }
+    });
+
+    // Check if we're coming from a reset link (mode=reset in URL)
+    if (mode === 'reset') {
+      // The actual reset handling happens via PASSWORD_RECOVERY event
+      // This is just a fallback indicator
+      setIsResetMode(true);
+    }
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [searchParams, setSearchParams]);
+
+  // Redirect if already authenticated (but not in reset mode)
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !isResetMode && step !== 'reset-password') {
       if (role === 'user') {
         navigate('/user', { replace: true });
       } else if (role === 'mechanic') {
@@ -42,15 +92,7 @@ const Auth: React.FC = () => {
         navigate('/', { replace: true });
       }
     }
-  }, [isAuthenticated, authLoading, role, navigate]);
-
-  // Handle email confirmation from URL
-  useEffect(() => {
-    const type = searchParams.get('type');
-    if (type === 'signup' || type === 'email_change') {
-      toast.success('Email verified successfully! You can now log in.');
-    }
-  }, [searchParams]);
+  }, [isAuthenticated, authLoading, role, navigate, isResetMode, step]);
 
   // Cooldown timer
   useEffect(() => {
@@ -84,7 +126,6 @@ const Auth: React.FC = () => {
 
     try {
       // Try to sign in with a dummy password to check if user exists
-      // Supabase returns different errors for existing vs non-existing users
       const { error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password: '__check_user_exists_dummy_pwd_' + Date.now(),
@@ -94,34 +135,26 @@ const Auth: React.FC = () => {
         const msg = error.message.toLowerCase();
         
         if (msg.includes('invalid login credentials')) {
-          // This means user EXISTS but password is wrong
-          // Supabase returns this for existing users with wrong passwords
           setIsExistingUser(true);
           setStep('login-password');
         } else if (msg.includes('email not confirmed')) {
-          // User exists but email not verified
           setIsExistingUser(true);
           setStep('verification');
           setResendCooldown(30);
           toast.info('Please verify your email to continue.');
         } else if (msg.includes('user not found') || msg.includes('no user')) {
-          // User doesn't exist - go to signup
           setIsExistingUser(false);
           setStep('signup-details');
         } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
           setError('Too many attempts. Please wait a moment.');
         } else {
-          // For any other error, let user choose their path
-          // Default to signup for new users
           setIsExistingUser(false);
           setStep('signup-details');
         }
       } else {
-        // Somehow logged in (very unlikely with random password)
         toast.success('Welcome back!');
       }
     } catch (err) {
-      // Network or other error - let user try signup
       setIsExistingUser(false);
       setStep('signup-details');
     } finally {
@@ -133,7 +166,6 @@ const Auth: React.FC = () => {
     e.preventDefault();
     setError('');
     
-    // Validate password format first
     try {
       passwordSchema.parse(password);
     } catch (e) {
@@ -155,20 +187,14 @@ const Auth: React.FC = () => {
 
       if (error) {
         const msg = error.message.toLowerCase();
-        
-        // Clear password but keep email for retry
         setPassword('');
         
         if (msg.includes('invalid login credentials')) {
-          // Since we verified email exists in previous step, this means wrong password
           if (isExistingUser) {
             setError('Incorrect password. Please try again.');
           } else {
-            // Edge case: user doesn't exist
             setError('No account found with this email.');
-            setTimeout(() => {
-              setStep('signup-details');
-            }, 1500);
+            setTimeout(() => setStep('signup-details'), 1500);
           }
         } else if (msg.includes('email not confirmed')) {
           setStep('verification');
@@ -178,18 +204,14 @@ const Auth: React.FC = () => {
           setError('Too many login attempts. Please wait a moment and try again.');
         } else if (msg.includes('user not found')) {
           setError('No account found with this email.');
-          setTimeout(() => {
-            setStep('signup-details');
-          }, 1500);
+          setTimeout(() => setStep('signup-details'), 1500);
         } else {
-          // Generic fallback - don't expose internal details
           setError('Unable to sign in. Please check your credentials.');
         }
         return;
       }
 
       toast.success('Welcome back!');
-      // Auth state change will handle redirect
     } catch (err) {
       setPassword('');
       setError('Something went wrong. Please try again.');
@@ -244,7 +266,6 @@ const Auth: React.FC = () => {
       }
 
       if (data.user && !data.user.email_confirmed_at) {
-        // Send custom verification email
         try {
           await supabase.functions.invoke('send-verification-email', {
             body: {
@@ -263,6 +284,96 @@ const Auth: React.FC = () => {
       } else if (data.session) {
         toast.success('Account created successfully!');
       }
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    if (!validateEmail(normalizedEmail)) return;
+    
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      });
+
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('too many requests') || msg.includes('rate limit')) {
+          setError('Too many attempts. Please wait a moment.');
+        } else {
+          setError('Unable to send reset link. Please try again.');
+        }
+        return;
+      }
+
+      setStep('reset-sent');
+      setResendCooldown(60);
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Validate password
+    try {
+      passwordSchema.parse(password);
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setError(e.errors[0].message);
+        return;
+      }
+    }
+
+    // Check passwords match
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+
+      if (error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('same password') || msg.includes('different password')) {
+          setError('Please choose a different password from your previous one.');
+        } else if (msg.includes('weak')) {
+          setError('Please use a stronger password.');
+        } else if (msg.includes('session') || msg.includes('expired') || msg.includes('invalid')) {
+          setStep('reset-expired');
+        } else {
+          setError('Unable to reset password. Please try again.');
+        }
+        return;
+      }
+
+      // Sign out to clear session and force fresh login
+      await supabase.auth.signOut();
+      
+      // Reset all state
+      setIsResetMode(false);
+      setPassword('');
+      setConfirmPassword('');
+      setEmail('');
+      
+      toast.success('Password reset successful! Please log in with your new password.');
+      setStep('email');
     } catch (err) {
       setError('Something went wrong. Please try again.');
     } finally {
@@ -290,7 +401,6 @@ const Auth: React.FC = () => {
         return;
       }
 
-      // Send custom email
       try {
         await supabase.functions.invoke('send-verification-email', {
           body: {
@@ -312,13 +422,45 @@ const Auth: React.FC = () => {
     }
   };
 
+  const handleResendResetLink = async () => {
+    if (resendCooldown > 0 || !email) return;
+    
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      });
+
+      if (error) {
+        setError('Unable to resend. Please try again.');
+        return;
+      }
+
+      setResendCooldown(60);
+      toast.success('Password reset link sent!');
+    } catch (err) {
+      setError('Failed to resend. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleBack = () => {
     setError('');
     setPassword('');
+    setConfirmPassword('');
     
-    if (step === 'verification') {
+    if (step === 'verification' || step === 'login-password' || step === 'signup-details') {
       setStep('email');
-    } else if (step === 'login-password' || step === 'signup-details') {
+    } else if (step === 'forgot-password' || step === 'reset-sent') {
+      setStep('login-password');
+    } else if (step === 'reset-password') {
+      // Can't go back from reset - must complete or get new link
+      setStep('email');
+      setIsResetMode(false);
+    } else if (step === 'reset-expired') {
       setStep('email');
     } else {
       navigate('/');
@@ -427,16 +569,8 @@ const Auth: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                // Handle forgot password
-                supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-                  redirectTo: `${window.location.origin}/auth?mode=reset`,
-                }).then(({ error }) => {
-                  if (error) {
-                    toast.error(error.message);
-                  } else {
-                    toast.success('Password reset link sent to your email');
-                  }
-                });
+                setError('');
+                setStep('forgot-password');
               }}
               className="text-primary text-sm font-medium mt-4 self-start hover:underline"
             >
@@ -453,6 +587,214 @@ const Auth: React.FC = () => {
               </Button>
             </div>
           </form>
+        )}
+
+        {/* Forgot Password Step */}
+        {step === 'forgot-password' && (
+          <form onSubmit={handleForgotPassword} className="flex-1 flex flex-col animate-fade-in">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Reset your password
+            </h1>
+            <p className="text-muted-foreground mb-8">
+              Enter your email and we'll send you a reset link
+            </p>
+
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError('');
+              }}
+              className={`h-14 text-lg px-4 ${error ? 'border-destructive' : ''}`}
+              autoFocus
+              autoComplete="email"
+              disabled={isLoading}
+            />
+            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+
+            <div className="mt-auto pt-8">
+              <Button
+                type="submit"
+                className="w-full h-14 text-lg font-semibold"
+                disabled={!email.trim() || isLoading}
+              >
+                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send reset link'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Reset Link Sent Step */}
+        {step === 'reset-sent' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in">
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+              <Mail className="h-10 w-10 text-primary" />
+            </div>
+
+            <h1 className="text-2xl font-bold text-foreground mb-3">
+              Check your email
+            </h1>
+
+            <p className="text-muted-foreground mb-2">
+              Password reset link sent to
+            </p>
+            <p className="font-semibold text-foreground mb-6">
+              {email}
+            </p>
+
+            <div className="bg-muted/50 rounded-2xl p-5 mb-6 w-full max-w-sm">
+              <div className="flex items-start gap-3 text-left">
+                <KeyRound className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Reset your password</p>
+                  <p>Click the link in the email to set a new password. The link will open directly in this app.</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              Didn't receive the email? Check your spam folder.
+            </p>
+
+            <Button
+              variant="outline"
+              onClick={handleResendResetLink}
+              disabled={resendCooldown > 0 || isLoading}
+              className="w-full max-w-sm h-12"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : resendCooldown > 0 ? (
+                `Resend in ${resendCooldown}s`
+              ) : (
+                'Resend reset link'
+              )}
+            </Button>
+
+            <button
+              onClick={() => {
+                setStep('email');
+                setError('');
+              }}
+              className="text-primary text-sm font-medium mt-4 hover:underline"
+            >
+              Back to login
+            </button>
+          </div>
+        )}
+
+        {/* Reset Password Step (from email link) */}
+        {step === 'reset-password' && (
+          <form onSubmit={handleResetPassword} className="flex-1 flex flex-col animate-fade-in">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Set new password
+            </h1>
+            <p className="text-muted-foreground mb-8">
+              Create a strong password for your account
+            </p>
+
+            <div className="space-y-4">
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="New password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError('');
+                  }}
+                  className={`h-14 text-lg px-4 pr-12 ${error ? 'border-destructive' : ''}`}
+                  autoFocus
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setError('');
+                  }}
+                  className={`h-14 text-lg px-4 pr-12 ${error ? 'border-destructive' : ''}`}
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            {error && <p className="text-destructive text-sm mt-2">{error}</p>}
+
+            <p className="text-muted-foreground text-xs mt-4">
+              Password must be at least 6 characters
+            </p>
+
+            <div className="mt-auto pt-8">
+              <Button
+                type="submit"
+                className="w-full h-14 text-lg font-semibold"
+                disabled={!password || !confirmPassword || isLoading}
+              >
+                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Reset password'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Reset Link Expired Step */}
+        {step === 'reset-expired' && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center animate-fade-in">
+            <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center mb-6">
+              <AlertCircle className="h-10 w-10 text-destructive" />
+            </div>
+
+            <h1 className="text-2xl font-bold text-foreground mb-3">
+              Link expired
+            </h1>
+
+            <p className="text-muted-foreground mb-6 max-w-sm">
+              This password reset link has expired or is invalid. Please request a new one.
+            </p>
+
+            <Button
+              onClick={() => {
+                setStep('forgot-password');
+                setError('');
+              }}
+              className="w-full max-w-sm h-12"
+            >
+              Request new link
+            </Button>
+
+            <button
+              onClick={() => {
+                setStep('email');
+                setError('');
+              }}
+              className="text-primary text-sm font-medium mt-4 hover:underline"
+            >
+              Back to login
+            </button>
+          </div>
         )}
 
         {/* Signup Details Step */}
