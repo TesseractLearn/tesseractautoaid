@@ -74,10 +74,15 @@ const Auth: React.FC = () => {
       }
     }
 
-    // Handle email confirmation
+    // Handle email confirmation - sign out and show login
     if (type === 'signup' || type === 'email_change') {
-      toast.success('Email verified successfully! You can now log in.');
-      setSearchParams({}, { replace: true });
+      // Sign out to prevent auto-login, user must enter password
+      supabase.auth.signOut().then(() => {
+        setStep('login-email');
+        toast.success('Email verified successfully! Please log in.');
+        setSearchParams({}, { replace: true });
+      });
+      return;
     }
 
     // Listen for auth events to detect recovery (password reset)
