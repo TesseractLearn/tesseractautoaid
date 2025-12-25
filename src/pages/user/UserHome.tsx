@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { Button } from '@/components/ui/button';
+import LocationPermission from '@/components/LocationPermission';
 import { 
   MapPin, 
   Bell, 
   ChevronRight,
   Clock,
-  Wrench
+  Wrench,
+  Loader2
 } from 'lucide-react';
 import { 
   PunctureIcon, 
@@ -43,7 +46,35 @@ const UserHome: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { displayName, isLoading: profileLoading } = useUserProfile();
-  const [location] = useState('Bandra West, Mumbai');
+  const { 
+    latitude, 
+    longitude, 
+    loading: locationLoading, 
+    permissionState, 
+    hasLocation,
+    requestLocation 
+  } = useGeolocation();
+  
+  const [locationAddress, setLocationAddress] = useState<string>('Tap to enable location');
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
+  // Request location on mount if permission is prompt
+  useEffect(() => {
+    if (permissionState === 'prompt') {
+      setShowLocationPrompt(true);
+    } else if (permissionState === 'granted' && !hasLocation) {
+      requestLocation();
+    }
+  }, [permissionState, hasLocation, requestLocation]);
+
+  // Update location address when coordinates change
+  useEffect(() => {
+    if (hasLocation && latitude && longitude) {
+      setShowLocationPrompt(false);
+      // For now, show coordinates. In production, you'd reverse geocode
+      setLocationAddress(`${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`);
+    }
+  }, [hasLocation, latitude, longitude]);
 
   // Get first name for greeting
   const firstName = displayName?.split(' ')[0] || null;
@@ -54,6 +85,19 @@ const UserHome: React.FC = () => {
     { icon: <EngineIcon size={24} />, name: 'Engine', description: 'Engine issues', path: 'engine' },
     { icon: <WrenchIcon size={24} />, name: 'General', description: 'All repairs', path: 'general' },
   ];
+
+  const handleLocationClick = () => {
+    if (permissionState === 'denied') {
+      setShowLocationPrompt(true);
+    } else if (permissionState === 'prompt' || !hasLocation) {
+      requestLocation();
+    }
+  };
+
+  const handleLocationGranted = (lat: number, lng: number) => {
+    setShowLocationPrompt(false);
+    setLocationAddress(`${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
+  };
 
 
   return (
@@ -77,16 +121,36 @@ const UserHome: React.FC = () => {
           </div>
 
           {/* Location Bar */}
-          <button className="flex items-center gap-2 w-full bg-primary-foreground/10 rounded-xl px-4 py-3 text-left">
-            <MapPin className="w-5 h-5 text-primary-foreground/80" />
+          <button 
+            onClick={handleLocationClick}
+            className="flex items-center gap-2 w-full bg-primary-foreground/10 rounded-xl px-4 py-3 text-left"
+          >
+            {locationLoading ? (
+              <Loader2 className="w-5 h-5 text-primary-foreground/80 animate-spin" />
+            ) : (
+              <MapPin className="w-5 h-5 text-primary-foreground/80" />
+            )}
             <div className="flex-1">
               <p className="text-xs text-primary-foreground/60">Your location</p>
-              <p className="text-sm font-medium">{location}</p>
+              <p className="text-sm font-medium">
+                {locationLoading ? 'Getting location...' : locationAddress}
+              </p>
             </div>
             <ChevronRight className="w-5 h-5 text-primary-foreground/60" />
           </button>
         </div>
       </header>
+
+      {/* Location Permission Modal */}
+      {showLocationPrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <LocationPermission
+            onLocationGranted={handleLocationGranted}
+            onPermissionDenied={() => setShowLocationPrompt(false)}
+            className="max-w-sm w-full"
+          />
+        </div>
+      )}
 
       {/* Find Mechanics Button - Uber style */}
       <div className="px-4 -mt-4 relative z-10">
