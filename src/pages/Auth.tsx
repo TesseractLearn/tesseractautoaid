@@ -43,6 +43,7 @@ const Auth: React.FC = () => {
   const [errors, setErrors] = useState<{ fullName?: string; email?: string; password?: string }>({});
   const [verificationSent, setVerificationSent] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -63,6 +64,14 @@ const Auth: React.FC = () => {
       setVerificationSent(false);
     }
   }, [mode]);
+
+  // Cooldown timer for resend button
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const validateForm = (): boolean => {
     try {
@@ -186,6 +195,7 @@ const Auth: React.FC = () => {
 
           setVerificationEmail(normalizedEmail);
           setVerificationSent(true);
+          setResendCooldown(30);
           toast.success('Verification email sent! Please check your inbox to verify your account.');
         } else if (data.session) {
           // Auto-confirm is enabled, user is logged in
@@ -253,6 +263,7 @@ const Auth: React.FC = () => {
         console.error('Error calling verification email function:', emailErr);
       }
 
+      setResendCooldown(30);
       toast.success('Verification email resent! Please check your inbox.');
     } catch (error) {
       toast.error('Failed to resend verification email. Please try again.');
@@ -390,14 +401,16 @@ const Auth: React.FC = () => {
                 variant="outline"
                 className="w-full"
                 onClick={handleResendVerification}
-                disabled={isLoading}
+                disabled={isLoading || resendCooldown > 0}
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Resend Verification Email
+                {resendCooldown > 0 
+                  ? `Resend in ${resendCooldown}s` 
+                  : 'Resend Verification Email'}
               </Button>
               
               <Button
