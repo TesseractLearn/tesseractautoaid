@@ -31,10 +31,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        setIsLoading(false);
+
+        // Avoid prematurely marking auth as "done" before we verify the stored session.
+        if (event !== 'INITIAL_SESSION') {
+          setIsLoading(false);
+        }
 
         // Handle profile creation for OAuth users
-        if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
+        if (
+          session?.user &&
+          (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')
+        ) {
           // Defer the profile check to avoid Supabase deadlock
           setTimeout(() => {
             ensureProfileExists(session.user);
@@ -43,12 +50,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // THEN check for existing session (and verify it is still valid)
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: { user }, error } = await supabase.auth.getUser();
+
+      // If the account was deleted or the token is invalid, clear local auth state.
+      if (error || !user) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setRoleState(null);
+        localStorage.removeItem('autoaid_role');
+        setIsLoading(false);
+        return;
+      }
+
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(user);
       setIsLoading(false);
-    });
+    })();
 
     return () => subscription.unsubscribe();
   }, []);
