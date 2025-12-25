@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Car, MapPin, Bell, Shield, LogOut, ChevronRight, CreditCard, History } from 'lucide-react';
-
-interface Profile {
-  full_name: string | null;
-  phone: string | null;
-}
+import { Car, Bell, Shield, LogOut, ChevronRight, CreditCard, History, Loader2 } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -20,26 +16,15 @@ interface Booking {
 const UserProfile: React.FC = () => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { profile, displayName, isLoading: profileLoading } = useUserProfile();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [vehicleCount, setVehicleCount] = useState(0);
 
   useEffect(() => {
     if (user) {
-      fetchProfile();
       fetchBookingHistory();
     }
   }, [user]);
-
-  const fetchProfile = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('full_name, phone')
-      .eq('user_id', user!.id)
-      .maybeSingle();
-    
-    if (data) setProfile(data);
-  };
 
   const fetchBookingHistory = async () => {
     const { data } = await supabase
@@ -73,19 +58,27 @@ const UserProfile: React.FC = () => {
     { icon: <Shield className="w-5 h-5" />, label: 'Privacy & Security', subtitle: 'Account settings' },
   ];
 
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background safe-area-inset-top">
       <div className="px-4 py-6">
         {/* Profile Header */}
         <div className="flex items-center gap-4 mb-8">
           <img 
-            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.full_name || 'user'}`}
+            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName || 'user'}`}
             alt="Profile"
             className="w-16 h-16 rounded-full border-2 border-primary"
           />
           <div>
             <h1 className="text-xl font-bold text-foreground">
-              {profile?.full_name || 'User'}
+              {displayName || 'Loading...'}
             </h1>
             <p className="text-sm text-muted-foreground">
               {user?.email || profile?.phone || ''}
