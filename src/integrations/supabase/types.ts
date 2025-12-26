@@ -71,6 +71,13 @@ export type Database = {
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bookings_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       mechanics: {
@@ -252,10 +259,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      mechanics_public: {
+        Row: {
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          is_available: boolean | null
+          latitude: number | null
+          longitude: number | null
+          rating: number | null
+          specialization: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          rating?: number | null
+          specialization?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          rating?: number | null
+          specialization?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      has_active_booking_with_mechanic: {
+        Args: { _mechanic_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
