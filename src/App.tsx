@@ -10,6 +10,7 @@ import SplashScreen from "./pages/SplashScreen";
 import RoleSelection from "./pages/RoleSelection";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import InstallApp from "./pages/InstallApp";
 
 // Layouts
 import UserLayout from "./layouts/UserLayout";
@@ -65,6 +66,7 @@ const App = () => (
             <Route path="/" element={<SplashScreen />} />
             <Route path="/role-selection" element={<RoleSelection />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/install" element={<InstallApp />} />
 
             {/* User Routes */}
             <Route path="/user" element={
