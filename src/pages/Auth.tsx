@@ -55,6 +55,7 @@ const Auth: React.FC = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isResetMode, setIsResetMode] = useState(false);
+  const [isCheckingRole, setIsCheckingRole] = useState(false);
 
   // Handle password reset link detection and auth events
   useEffect(() => {
@@ -110,7 +111,7 @@ const Auth: React.FC = () => {
 
   // Redirect if already authenticated (but not in reset mode)
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !isResetMode && step !== 'reset-password') {
+    if (!authLoading && isAuthenticated && !isResetMode && !isCheckingRole && step !== 'reset-password') {
       if (role === 'user') {
         navigate('/user', { replace: true });
       } else if (role === 'mechanic') {
@@ -119,7 +120,7 @@ const Auth: React.FC = () => {
         navigate('/', { replace: true });
       }
     }
-  }, [isAuthenticated, authLoading, role, navigate, isResetMode, step]);
+  }, [isAuthenticated, authLoading, role, navigate, isResetMode, isCheckingRole, step]);
 
   // Cooldown timer
   useEffect(() => {
@@ -203,6 +204,7 @@ const Auth: React.FC = () => {
     }
 
     setIsLoading(true);
+    setIsCheckingRole(true);
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -266,12 +268,14 @@ const Auth: React.FC = () => {
         }
       }
 
+      setIsCheckingRole(false);
       toast.success('Welcome back!');
     } catch (err) {
       setPassword('');
       setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
+      setIsCheckingRole(false);
     }
   };
 
