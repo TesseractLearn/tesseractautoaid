@@ -1,0 +1,133 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    // Authenticate the mechanic
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    )
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token)
+    if (claimsErr || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    const userId = claimsData.claims.sub
+
+    // Use service role for transactional operations
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+
+    const { bookingId, mechanicId } = await req.json()
+
+    // Verify caller is this mechanic
+    const { data: mechanic } = await supabase
+      .from('mechanics')
+      .select('id')
+      .eq('id', mechanicId)
+      .eq('user_id', userId)
+      .single()
+
+    if (!mechanic) {
+      return new Response(JSON.stringify({ error: 'Not authorized for this mechanic' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Check booking is still available
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('id', bookingId)
+      .in('status', ['offer_sent', 'pending'])
+      .single()
+
+    if (!booking) {
+      return new Response(JSON.stringify({ error: 'Booking already taken or expired' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Verify there's a pending offer for this mechanic
+    const { data: offer } = await supabase
+      .from('booking_offers')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .eq('mechanic_id', mechanicId)
+      .eq('status', 'pending')
+      .single()
+
+    if (!offer) {
+      return new Response(JSON.stringify({ error: 'No pending offer found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Accept: update booking
+    await supabase
+      .from('bookings')
+      .update({ status: 'accepted', mechanic_id: mechanicId })
+      .eq('id', bookingId)
+
+    // Mark this offer as accepted
+    await supabase
+      .from('booking_offers')
+      .update({ status: 'accepted' })
+      .eq('id', offer.id)
+
+    // Expire all other offers for this booking
+    await supabase
+      .from('booking_offers')
+      .update({ status: 'expired' })
+      .eq('booking_id', bookingId)
+      .neq('id', offer.id)
+
+    // Increment mechanic job counts
+    await supabase
+      .from('mechanics')
+      .update({
+        active_jobs_count: (mechanic as any).active_jobs_count ? (mechanic as any).active_jobs_count + 1 : 1,
+        recent_jobs_count: (mechanic as any).recent_jobs_count ? (mechanic as any).recent_jobs_count + 1 : 1,
+        total_jobs_count: (mechanic as any).total_jobs_count ? (mechanic as any).total_jobs_count + 1 : 1,
+      })
+      .eq('id', mechanicId)
+
+    // Also update service_requests if linked
+    await supabase
+      .from('service_requests')
+      .update({ status: 'accepted', target_mechanic_id: mechanicId })
+      .eq('user_id', booking.user_id)
+      .eq('status', 'pending')
+
+    return new Response(JSON.stringify({ success: true, message: 'Offer accepted' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+})

@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.send-verification-email]
 verify_jwt = false
+
+[functions.dispatch-booking]
+verify_jwt = false
+
+[functions.accept-offer]
+verify_jwt = false
+
+[functions.handle-offer-timeout]
+verify_jwt = false

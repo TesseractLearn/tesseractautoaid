@@ -3,62 +3,57 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-interface ServiceRequest {
+interface BookingOffer {
   id: string;
-  user_id: string;
-  service_type: string;
-  issue_description: string | null;
-  latitude: number;
-  longitude: number;
-  address: string | null;
-  radius_km: number;
-  target_mechanic_id: string | null;
-  status: string;
-  created_at: string;
-  expires_at: string;
-}
-
-interface ServiceRequestResponse {
-  id: string;
-  request_id: string;
+  booking_id: string;
   mechanic_id: string;
   status: string;
+  score: number;
+  eta_minutes: number | null;
   created_at: string;
+  mechanic?: {
+    id: string;
+    full_name: string;
+    phone: string | null;
+    specialization: string | null;
+    rating: number | null;
+    latitude: number;
+    longitude: number;
+  };
 }
 
-interface MechanicWithDetails {
+interface ActiveBooking {
   id: string;
-  full_name: string;
-  phone: string | null;
-  specialization: string | null;
-  rating: number | null;
+  status: string;
+  service_type: string;
+  mechanic_id: string | null;
   latitude: number;
   longitude: number;
-  distance?: number;
+  created_at: string;
 }
 
 export const useServiceRequests = () => {
   const { user } = useAuth();
-  const [activeRequest, setActiveRequest] = useState<ServiceRequest | null>(null);
-  const [responses, setResponses] = useState<(ServiceRequestResponse & { mechanic?: MechanicWithDetails })[]>([]);
+  const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
+  const [offers, setOffers] = useState<BookingOffer[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
 
-  // Create a service request (broadcast or direct)
+  // Create a booking and trigger dispatch
   const createRequest = useCallback(async (params: {
     serviceType: string;
     issueDescription?: string;
     latitude: number;
     longitude: number;
     address?: string;
-    targetMechanicId?: string;
-    radiusKm?: number;
   }) => {
     if (!user) return null;
     setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('service_requests')
+      // Create booking with pending status
+      const { data: booking, error } = await supabase
+        .from('bookings')
         .insert({
           user_id: user.id,
           service_type: params.serviceType,
@@ -66,17 +61,40 @@ export const useServiceRequests = () => {
           latitude: params.latitude,
           longitude: params.longitude,
           address: params.address || null,
-          target_mechanic_id: params.targetMechanicId || null,
-          radius_km: params.radiusKm || 10,
           status: 'pending',
         })
         .select()
         .single();
 
       if (error) throw error;
-      setActiveRequest(data);
-      toast.success(params.targetMechanicId ? 'Request sent to mechanic!' : 'Request broadcasted to nearby mechanics!');
-      return data;
+      setActiveBooking(booking);
+
+      // Trigger dispatch algorithm
+      setDispatching(true);
+      const { data: dispatchResult, error: dispatchErr } = await supabase.functions.invoke('dispatch-booking', {
+        body: { bookingId: booking.id },
+      });
+
+      if (dispatchErr) {
+        console.error('Dispatch error:', dispatchErr);
+        toast.error('Failed to find mechanics');
+      } else if (dispatchResult?.status === 'no_mechanic_found') {
+        toast.error('No mechanics available nearby. Try again later.');
+        setActiveBooking(prev => prev ? { ...prev, status: 'no_mechanic_found' } : null);
+      } else {
+        toast.success(`Request sent to ${dispatchResult?.offersCount || 0} nearby mechanics!`);
+        setActiveBooking(prev => prev ? { ...prev, status: 'offer_sent' } : null);
+
+        // Schedule timeout check after 60 seconds
+        setTimeout(async () => {
+          await supabase.functions.invoke('handle-offer-timeout', {
+            body: { bookingId: booking.id },
+          });
+        }, 60000);
+      }
+
+      setDispatching(false);
+      return booking;
     } catch (err: any) {
       toast.error('Failed to send request: ' + err.message);
       return null;
@@ -85,137 +103,137 @@ export const useServiceRequests = () => {
     }
   }, [user]);
 
-  // Cancel a request
-  const cancelRequest = useCallback(async (requestId: string) => {
+  // Cancel a booking
+  const cancelRequest = useCallback(async (bookingId: string) => {
     try {
-      const { error } = await supabase
-        .from('service_requests')
+      await supabase
+        .from('bookings')
         .update({ status: 'cancelled' })
-        .eq('id', requestId);
-      if (error) throw error;
-      setActiveRequest(null);
-      setResponses([]);
+        .eq('id', bookingId);
+
+      // Expire all offers
+      await supabase
+        .from('booking_offers')
+        .update({ status: 'expired' })
+        .eq('booking_id', bookingId);
+
+      setActiveBooking(null);
+      setOffers([]);
       toast.info('Request cancelled');
     } catch (err: any) {
       toast.error('Failed to cancel: ' + err.message);
     }
   }, []);
 
-  // Accept a mechanic's response
-  const acceptResponse = useCallback(async (responseId: string, mechanicId: string, requestId: string) => {
-    try {
-      // Update request status
-      await supabase
-        .from('service_requests')
-        .update({ status: 'accepted', target_mechanic_id: mechanicId })
-        .eq('id', requestId);
-
-      // Create booking from the request
-      if (activeRequest) {
-        await supabase.from('bookings').insert({
-          user_id: activeRequest.user_id,
-          mechanic_id: mechanicId,
-          service_type: activeRequest.service_type,
-          issue_description: activeRequest.issue_description,
-          latitude: activeRequest.latitude,
-          longitude: activeRequest.longitude,
-          address: activeRequest.address,
-          status: 'accepted',
-        });
-      }
-
-      setActiveRequest(null);
-      toast.success('Mechanic accepted! They are on their way.');
-    } catch (err: any) {
-      toast.error('Failed to accept: ' + err.message);
-    }
-  }, [activeRequest]);
-
-  // Listen for responses to user's active request
+  // Listen for booking updates and offers
   useEffect(() => {
-    if (!activeRequest) return;
+    if (!activeBooking) return;
 
-    // Fetch existing responses
-    const fetchResponses = async () => {
+    // Fetch existing offers
+    const fetchOffers = async () => {
       const { data } = await supabase
-        .from('service_request_responses')
+        .from('booking_offers')
         .select('*')
-        .eq('request_id', activeRequest.id);
-      
-      if (data) {
-        // Fetch mechanic details for each response
+        .eq('booking_id', activeBooking.id)
+        .eq('status', 'accepted');
+
+      // Note: 'accepted' here means mechanic accepted the offer
+      if (data && data.length > 0) {
         const withMechanics = await Promise.all(
-          data.map(async (r) => {
+          data.map(async (o) => {
             const { data: mech } = await supabase
               .from('mechanics')
               .select('*')
-              .eq('id', r.mechanic_id)
+              .eq('id', o.mechanic_id)
               .single();
-            return { ...r, mechanic: mech || undefined };
+            return { ...o, mechanic: mech || undefined };
           })
         );
-        setResponses(withMechanics);
+        setOffers(withMechanics);
       }
     };
 
-    fetchResponses();
+    fetchOffers();
 
-    // Real-time subscription for new responses
-    const channel = supabase
-      .channel(`request-responses-${activeRequest.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'service_request_responses',
-          filter: `request_id=eq.${activeRequest.id}`,
-        },
-        async (payload) => {
-          const newResponse = payload.new as ServiceRequestResponse;
-          const { data: mech } = await supabase
-            .from('mechanics')
-            .select('*')
-            .eq('id', newResponse.mechanic_id)
-            .single();
-          
-          setResponses(prev => [...prev, { ...newResponse, mechanic: mech || undefined }]);
-          toast.success(`${mech?.full_name || 'A mechanic'} responded to your request!`);
+    // Real-time: listen for booking status changes
+    const bookingChannel = supabase
+      .channel(`booking-${activeBooking.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'bookings',
+        filter: `id=eq.${activeBooking.id}`,
+      }, (payload) => {
+        const updated = payload.new as ActiveBooking;
+        setActiveBooking(updated);
+        if (updated.status === 'accepted') {
+          toast.success('A mechanic has accepted! They are on their way.');
+        } else if (updated.status === 'no_mechanic_found') {
+          toast.error('No mechanics available. Please try again.');
         }
-      )
+      })
+      .subscribe();
+
+    // Real-time: listen for new offer acceptances
+    const offersChannel = supabase
+      .channel(`booking-offers-${activeBooking.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'booking_offers',
+        filter: `booking_id=eq.${activeBooking.id}`,
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const offer = payload.new as BookingOffer;
+          if (offer.status === 'accepted') {
+            // Mechanic accepted - fetch their details
+            const { data: mech } = await supabase
+              .from('mechanics')
+              .select('*')
+              .eq('id', offer.mechanic_id)
+              .single();
+            setOffers(prev => {
+              const exists = prev.find(o => o.id === offer.id);
+              if (exists) return prev.map(o => o.id === offer.id ? { ...offer, mechanic: mech || undefined } : o);
+              return [...prev, { ...offer, mechanic: mech || undefined }];
+            });
+          }
+        }
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(bookingChannel);
+      supabase.removeChannel(offersChannel);
     };
-  }, [activeRequest]);
+  }, [activeBooking?.id]);
 
-  // Check for existing active request on mount
+  // Check for existing active booking on mount
   useEffect(() => {
     if (!user) return;
-    
+
     const checkActive = async () => {
       const { data } = await supabase
-        .from('service_requests')
+        .from('bookings')
         .select('*')
         .eq('user_id', user.id)
-        .eq('status', 'pending')
+        .in('status', ['pending', 'offer_sent', 'searching'])
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-      
-      if (data) setActiveRequest(data);
+
+      if (data) setActiveBooking(data);
     };
 
     checkActive();
   }, [user]);
 
   return {
-    activeRequest,
-    responses,
+    activeBooking,
+    offers,
     loading,
+    dispatching,
     createRequest,
     cancelRequest,
-    acceptResponse,
   };
 };

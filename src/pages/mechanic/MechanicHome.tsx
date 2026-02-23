@@ -10,10 +10,8 @@ import {
   MapPin, 
   Star, 
   Wallet,
-  TrendingUp,
   Clock,
   CheckCircle2,
-  AlertCircle,
   ChevronRight,
   Loader2
 } from 'lucide-react';
@@ -62,7 +60,6 @@ const MechanicHome: React.FC = () => {
             </Button>
           </div>
 
-          {/* Online Toggle */}
           <div className="flex items-center justify-between bg-primary-foreground/10 rounded-xl px-4 py-3">
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
@@ -82,7 +79,6 @@ const MechanicHome: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="px-4 py-6 space-y-6">
         {/* Stats */}
         <section className="grid grid-cols-2 gap-3">
@@ -106,11 +102,11 @@ const MechanicHome: React.FC = () => {
           </div>
         </section>
 
-        {/* Incoming Requests - REAL-TIME */}
+        {/* Incoming Offers */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Incoming Requests</h2>
+              <h2 className="text-lg font-semibold text-foreground">Incoming Job Offers</h2>
               {requests.length > 0 && (
                 <span className="bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
                   {requests.length}
@@ -126,58 +122,69 @@ const MechanicHome: React.FC = () => {
           ) : requests.length === 0 ? (
             <div className="bg-card rounded-xl p-6 border border-border/50 text-center">
               <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No incoming requests</p>
-              <p className="text-xs text-muted-foreground mt-1">New requests will appear here in real-time</p>
+              <p className="text-sm text-muted-foreground">No incoming offers</p>
+              <p className="text-xs text-muted-foreground mt-1">New job offers will appear here in real-time</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {requests.map((req, index) => (
+              {requests.map((offer, index) => (
                 <div
-                  key={req.id}
+                  key={offer.id}
                   className="bg-card rounded-xl p-4 border-2 border-warning/30 animate-fade-in shadow-md"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${req.user_name}`}
-                        alt={req.user_name}
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${offer.user_name}`}
+                        alt={offer.user_name}
                         className="w-10 h-10 rounded-full"
                       />
                       <div>
-                        <h3 className="font-semibold text-foreground">{req.user_name}</h3>
-                        <p className="text-xs text-muted-foreground">{getTimeAgo(req.created_at)}</p>
+                        <h3 className="font-semibold text-foreground">{offer.user_name}</h3>
+                        <p className="text-xs text-muted-foreground">{getTimeAgo(offer.created_at)}</p>
                       </div>
                     </div>
                     <span className="bg-warning/10 text-warning text-xs font-medium px-2 py-1 rounded-lg capitalize">
-                      {req.service_type}
+                      {offer.booking?.service_type || 'Service'}
                     </span>
                   </div>
 
-                  {req.issue_description && (
+                  {offer.booking?.issue_description && (
                     <p className="text-sm text-muted-foreground mb-3 bg-muted/50 rounded-lg p-2">
-                      "{req.issue_description}"
+                      "{offer.booking.issue_description}"
                     </p>
                   )}
 
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
-                      {req.latitude.toFixed(3)}°, {req.longitude.toFixed(3)}°
+                      {offer.booking?.latitude?.toFixed(3)}°, {offer.booking?.longitude?.toFixed(3)}°
                     </span>
+                    {offer.eta_minutes && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        ~{Math.round(offer.eta_minutes)} min ETA
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                    <Star className="w-3 h-3 text-warning" />
+                    <span>Match score: {(offer.score * 100).toFixed(0)}%</span>
                   </div>
 
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
                       className="flex-1"
-                      onClick={() => declineRequest(req.id)}
+                      onClick={() => declineRequest(offer.id)}
                     >
                       Decline
                     </Button>
                     <Button
                       className="flex-1"
-                      onClick={() => acceptRequest(req.id)}
+                      onClick={() => acceptRequest(offer.id)}
                     >
                       Accept Job
                     </Button>
