@@ -1,234 +1,212 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMechanicRequests } from '@/hooks/useMechanicRequests';
+import { useAuth } from '@/contexts/AuthContext';
 import { useMechanicProfile } from '@/hooks/useMechanicProfile';
+import { useMechanicRequests } from '@/hooks/useMechanicRequests';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+import LocationPermission from '@/components/LocationPermission';
 import { 
-  Bell, 
   MapPin, 
-  Star, 
-  Wallet,
-  Clock,
-  CheckCircle2,
+  Bell, 
   ChevronRight,
-  Loader2
+  Clock,
+  Wrench,
+  Loader2,
+  Wallet,
+  CheckCircle2,
+  Radio
 } from 'lucide-react';
+import { 
+  PunctureIcon, 
+  TowingIcon, 
+  EngineIcon, 
+  BatteryIcon,
+  WrenchIcon 
+} from '@/components/icons/ServiceIcons';
+import autoaidLogo from '@/assets/autoaid-logo.png';
+
+interface ServiceCardProps {
+  icon: React.ReactNode;
+  name: string;
+  description: string;
+  onClick: () => void;
+}
+
+const ServiceCard: React.FC<ServiceCardProps> = ({ icon, name, description, onClick }) => (
+  <button
+    onClick={onClick}
+    className="service-card flex flex-col items-center text-center p-4 min-w-[100px]"
+  >
+    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-2 text-primary">
+      {icon}
+    </div>
+    <span className="text-sm font-medium text-foreground">{name}</span>
+    <span className="text-xs text-muted-foreground mt-0.5">{description}</span>
+  </button>
+);
 
 const MechanicHome: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { requests, loading: requestsLoading, acceptRequest, declineRequest } = useMechanicRequests();
-  const [isOnline, setIsOnline] = useState(true);
+  const { data: mechanic } = useMechanicProfile();
+  const { requests } = useMechanicRequests();
+  const { 
+    latitude, 
+    longitude, 
+    loading: locationLoading, 
+    permissionState, 
+    hasLocation,
+    requestLocation 
+  } = useGeolocation();
+  
+  const [locationAddress, setLocationAddress] = useState<string>('Tap to enable location');
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
-  const stats = {
-    todayEarnings: 1250,
-    weeklyEarnings: 8500,
-    todayJobs: 3,
-    rating: 4.8,
-    totalJobs: 234,
+  const firstName = mechanic?.full_name?.split(' ')[0] || 'Mechanic';
+
+  useEffect(() => {
+    if (permissionState === 'prompt') {
+      setShowLocationPrompt(true);
+    } else if (permissionState === 'granted' && !hasLocation) {
+      requestLocation();
+    }
+  }, [permissionState, hasLocation, requestLocation]);
+
+  useEffect(() => {
+    if (hasLocation && latitude && longitude) {
+      setShowLocationPrompt(false);
+      setLocationAddress(`${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`);
+    }
+  }, [hasLocation, latitude, longitude]);
+
+  const services = [
+    { icon: <PunctureIcon size={24} />, name: 'Puncture', description: 'Flat tire fix', path: 'puncture' },
+    { icon: <BatteryIcon size={24} />, name: 'Battery', description: 'Jump start', path: 'battery' },
+    { icon: <TowingIcon size={24} />, name: 'Towing', description: 'Vehicle tow', path: 'towing' },
+    { icon: <EngineIcon size={24} />, name: 'Engine', description: 'Engine issues', path: 'engine' },
+    { icon: <WrenchIcon size={24} />, name: 'General', description: 'All repairs', path: 'general' },
+  ];
+
+  const handleLocationClick = () => {
+    if (permissionState === 'denied') {
+      setShowLocationPrompt(true);
+    } else if (permissionState === 'prompt' || !hasLocation) {
+      requestLocation();
+    }
   };
 
-  const getTimeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
+  const handleLocationGranted = (lat: number, lng: number) => {
+    setShowLocationPrompt(false);
+    setLocationAddress(`${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-gradient-mechanic text-primary-foreground safe-area-inset-top">
+      <header className="bg-gradient-hero text-primary-foreground safe-area-inset-top">
         <div className="px-4 pt-4 pb-6">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <img 
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email}`}
-                alt="Profile"
-                className="w-10 h-10 rounded-full border-2 border-primary-foreground/30"
-              />
-              <div>
-                <p className="text-xs text-primary-foreground/70">Good Morning</p>
-                <p className="font-semibold">Mechanic</p>
+            <div className="flex flex-col">
+              <span className="text-sm text-primary-foreground/80">
+                Hi, {firstName}
+              </span>
+              <div className="flex items-center gap-2">
+                <img src={autoaidLogo} alt="AutoAid" className="h-8 w-8" />
+                <span className="font-bold text-lg">AutoAid</span>
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+            <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10 relative">
               <Bell className="w-5 h-5" />
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between bg-primary-foreground/10 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-success animate-pulse' : 'bg-muted-foreground'}`} />
-              <div>
-                <p className="font-medium">{isOnline ? 'You are Online' : 'You are Offline'}</p>
-                <p className="text-xs text-primary-foreground/70">
-                  {isOnline ? 'Accepting new job requests' : 'Not accepting requests'}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={isOnline}
-              onCheckedChange={setIsOnline}
-              className="data-[state=checked]:bg-success"
-            />
-          </div>
-        </div>
-      </header>
-
-      <main className="px-4 py-6 space-y-6">
-        {/* Stats */}
-        <section className="grid grid-cols-2 gap-3">
-          <div className="bg-card rounded-xl p-4 border border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                <Wallet className="w-4 h-4 text-success" />
-              </div>
-              <span className="text-xs text-muted-foreground">Today's Earnings</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">₹{stats.todayEarnings.toLocaleString()}</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <CheckCircle2 className="w-4 h-4 text-primary" />
-              </div>
-              <span className="text-xs text-muted-foreground">Jobs Completed</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{stats.todayJobs}</p>
-          </div>
-        </section>
-
-        {/* Incoming Offers */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-foreground">Incoming Job Offers</h2>
               {requests.length > 0 && (
-                <span className="bg-destructive text-destructive-foreground text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
                   {requests.length}
                 </span>
               )}
-            </div>
+            </Button>
           </div>
 
-          {requestsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          {/* Location Bar */}
+          <button 
+            onClick={handleLocationClick}
+            className="flex items-center gap-2 w-full bg-primary-foreground/10 rounded-xl px-4 py-3 text-left"
+          >
+            {locationLoading ? (
+              <Loader2 className="w-5 h-5 text-primary-foreground/80 animate-spin" />
+            ) : (
+              <MapPin className="w-5 h-5 text-primary-foreground/80" />
+            )}
+            <div className="flex-1">
+              <p className="text-xs text-primary-foreground/60">Your location</p>
+              <p className="text-sm font-medium">
+                {locationLoading ? 'Getting location...' : locationAddress}
+              </p>
             </div>
-          ) : requests.length === 0 ? (
-            <div className="bg-card rounded-xl p-6 border border-border/50 text-center">
-              <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No incoming offers</p>
-              <p className="text-xs text-muted-foreground mt-1">New job offers will appear here in real-time</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {requests.map((offer, index) => (
-                <div
-                  key={offer.id}
-                  className="bg-card rounded-xl p-4 border-2 border-warning/30 animate-fade-in shadow-md"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${offer.user_name}`}
-                        alt={offer.user_name}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div>
-                        <h3 className="font-semibold text-foreground">{offer.user_name}</h3>
-                        <p className="text-xs text-muted-foreground">{getTimeAgo(offer.created_at)}</p>
-                      </div>
-                    </div>
-                    <span className="bg-warning/10 text-warning text-xs font-medium px-2 py-1 rounded-lg capitalize">
-                      {offer.booking?.service_type || 'Service'}
-                    </span>
-                  </div>
+            <ChevronRight className="w-5 h-5 text-primary-foreground/60" />
+          </button>
+        </div>
+      </header>
 
-                  {offer.booking?.issue_description && (
-                    <p className="text-sm text-muted-foreground mb-3 bg-muted/50 rounded-lg p-2">
-                      "{offer.booking.issue_description}"
-                    </p>
-                  )}
+      {/* Location Permission Modal */}
+      {showLocationPrompt && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <LocationPermission
+            onLocationGranted={handleLocationGranted}
+            onPermissionDenied={() => setShowLocationPrompt(false)}
+            className="max-w-sm w-full"
+          />
+        </div>
+      )}
 
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      {offer.booking?.latitude?.toFixed(3)}°, {offer.booking?.longitude?.toFixed(3)}°
-                    </span>
-                    {offer.eta_minutes && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        ~{Math.round(offer.eta_minutes)} min ETA
-                      </span>
-                    )}
-                  </div>
+      {/* Receive Online Request Button */}
+      <div className="px-4 -mt-4 relative z-10">
+        <Button
+          variant="default"
+          size="lg"
+          className="w-full shadow-xl bg-primary hover:bg-primary/90"
+          onClick={() => navigate('/mechanic/requests')}
+        >
+          <Radio className="w-5 h-5" />
+          Receive Online Request
+        </Button>
+      </div>
 
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-                    <Star className="w-3 h-3 text-warning" />
-                    <span>Match score: {(offer.score * 100).toFixed(0)}%</span>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => declineRequest(offer.id)}
-                    >
-                      Decline
-                    </Button>
-                    <Button
-                      className="flex-1"
-                      onClick={() => acceptRequest(offer.id)}
-                    >
-                      Accept Job
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Main Content */}
+      <main className="px-4 py-6 space-y-6">
+        {/* Services Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Specializations</h2>
+            <button className="text-sm text-primary font-medium flex items-center gap-1">
+              View all <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+            {services.map((service) => (
+              <ServiceCard
+                key={service.path}
+                icon={service.icon}
+                name={service.name}
+                description={service.description}
+                onClick={() => {}}
+              />
+            ))}
+          </div>
         </section>
 
-        {/* Quick Actions */}
+        {/* Recent Activity */}
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
-          <div className="space-y-2">
-            <button
-              onClick={() => navigate('/mechanic/earnings')}
-              className="w-full flex items-center justify-between p-4 bg-card rounded-xl border border-border/50 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-success" />
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-foreground">View Earnings</p>
-                  <p className="text-xs text-muted-foreground">Check your earnings & payouts</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <button
-              onClick={() => navigate('/mechanic/jobs')}
-              className="w-full flex items-center justify-between p-4 bg-card rounded-xl border border-border/50 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-left">
-                  <p className="font-medium text-foreground">Job History</p>
-                  <p className="text-xs text-muted-foreground">View past completed jobs</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Recent Activity</h2>
+          </div>
+          
+          <div className="bg-card rounded-xl p-4 border border-border/50">
+            <div className="text-center py-6">
+              <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No recent jobs</p>
+              <p className="text-xs text-muted-foreground mt-1">Your job history will appear here</p>
+            </div>
           </div>
         </section>
       </main>
