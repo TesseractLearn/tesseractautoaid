@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { Button } from '@/components/ui/button';
-import LocationPermission from '@/components/LocationPermission';
 import { 
   MapPin, 
   Bell, 
@@ -54,30 +54,17 @@ const UserHome: React.FC = () => {
     hasLocation,
     requestLocation 
   } = useGeolocation();
-  
-  const [locationAddress, setLocationAddress] = useState<string>('Tap to enable location');
-  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
 
-  // Request location on mount if permission is prompt
+  // Silently request location if permission already granted
   useEffect(() => {
-    if (permissionState === 'prompt') {
-      setShowLocationPrompt(true);
-    } else if (permissionState === 'granted' && !hasLocation) {
+    if (permissionState === 'granted' && !hasLocation) {
       requestLocation();
     }
   }, [permissionState, hasLocation, requestLocation]);
 
-  // Update location address when coordinates change
-  useEffect(() => {
-    if (hasLocation && latitude && longitude) {
-      setShowLocationPrompt(false);
-      // For now, show coordinates. In production, you'd reverse geocode
-      setLocationAddress(`${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`);
-    }
-  }, [hasLocation, latitude, longitude]);
-
-  // Get first name for greeting
   const firstName = displayName?.split(' ')[0] || null;
+
   const services = [
     { icon: <PunctureIcon size={24} />, name: 'Puncture', description: 'Flat tire fix', path: 'puncture' },
     { icon: <BatteryIcon size={24} />, name: 'Battery', description: 'Jump start', path: 'battery' },
@@ -87,18 +74,14 @@ const UserHome: React.FC = () => {
   ];
 
   const handleLocationClick = () => {
-    if (permissionState === 'denied') {
-      setShowLocationPrompt(true);
-    } else if (permissionState === 'prompt' || !hasLocation) {
+    if (!hasLocation) {
       requestLocation();
     }
   };
 
-  const handleLocationGranted = (lat: number, lng: number) => {
-    setShowLocationPrompt(false);
-    setLocationAddress(`${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
-  };
-
+  const locationDisplay = locationLoading || geocodeLoading
+    ? 'Getting location...'
+    : placeName || (hasLocation ? 'Location found' : 'Tap to enable location');
 
   return (
     <div className="min-h-screen bg-background">
@@ -125,34 +108,21 @@ const UserHome: React.FC = () => {
             onClick={handleLocationClick}
             className="flex items-center gap-2 w-full bg-primary-foreground/10 rounded-xl px-4 py-3 text-left"
           >
-            {locationLoading ? (
+            {locationLoading || geocodeLoading ? (
               <Loader2 className="w-5 h-5 text-primary-foreground/80 animate-spin" />
             ) : (
               <MapPin className="w-5 h-5 text-primary-foreground/80" />
             )}
             <div className="flex-1">
               <p className="text-xs text-primary-foreground/60">Your location</p>
-              <p className="text-sm font-medium">
-                {locationLoading ? 'Getting location...' : locationAddress}
-              </p>
+              <p className="text-sm font-medium">{locationDisplay}</p>
             </div>
             <ChevronRight className="w-5 h-5 text-primary-foreground/60" />
           </button>
         </div>
       </header>
 
-      {/* Location Permission Modal */}
-      {showLocationPrompt && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <LocationPermission
-            onLocationGranted={handleLocationGranted}
-            onPermissionDenied={() => setShowLocationPrompt(false)}
-            className="max-w-sm w-full"
-          />
-        </div>
-      )}
-
-      {/* Find Mechanics Button - Uber style */}
+      {/* Find Mechanics Button */}
       <div className="px-4 -mt-4 relative z-10">
         <Button
           variant="default"
@@ -188,7 +158,6 @@ const UserHome: React.FC = () => {
             ))}
           </div>
         </section>
-
 
         {/* Recent Activity */}
         <section>
