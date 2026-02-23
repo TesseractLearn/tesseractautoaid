@@ -32,6 +32,8 @@ import PrivacySecurity from "./pages/user/PrivacySecurity";
 
 // Mechanic Pages
 import MechanicHome from "./pages/mechanic/MechanicHome";
+import MechanicRegistration from "./pages/mechanic/MechanicRegistration";
+import MechanicGuard from "./components/MechanicGuard";
 
 const queryClient = new QueryClient();
 
@@ -88,10 +90,19 @@ const App = () => (
               <Route path="security" element={<PrivacySecurity />} />
             </Route>
 
+            {/* Mechanic Registration */}
+            <Route path="/mechanic/register" element={
+              <ProtectedRoute>
+                <MechanicRegistration />
+              </ProtectedRoute>
+            } />
+
             {/* Mechanic Routes */}
             <Route path="/mechanic" element={
               <ProtectedRoute>
-                <MechanicLayout />
+                <MechanicGuard>
+                  <MechanicLayout />
+                </MechanicGuard>
               </ProtectedRoute>
             }>
               <Route index element={<MechanicHome />} />
