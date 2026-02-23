@@ -224,9 +224,8 @@ const Auth: React.FC = () => {
             setTimeout(() => setStep('signup-details'), 1500);
           }
         } else if (msg.includes('email not confirmed') || msg.includes('email not verified')) {
-          // Strictly block unverified users
           setStep('verification');
-          setResendCooldown(0); // Allow immediate resend
+          setResendCooldown(0);
           setError('Please verify your email to continue. Check your inbox for the verification link.');
         } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
           setError('Too many login attempts. Please wait a moment and try again.');
@@ -237,6 +236,34 @@ const Auth: React.FC = () => {
           setError('Unable to sign in. Please check your credentials.');
         }
         return;
+      }
+
+      // Check if user's registered role matches the selected role
+      if (role) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', userData.user.id)
+            .maybeSingle();
+
+          if (roleData && roleData.role !== role) {
+            await supabase.auth.signOut();
+            setPassword('');
+            const otherRole = roleData.role === 'user' ? 'Vehicle Owner' : 'Mechanic';
+            setError(`This email is registered as a ${otherRole}. Please use a different email or select the correct role.`);
+            return;
+          }
+
+          // If no role exists yet (e.g. old account), assign current role
+          if (!roleData) {
+            await supabase.from('user_roles').insert({
+              user_id: userData.user.id,
+              role: role as 'user' | 'mechanic',
+            });
+          }
+        }
       }
 
       toast.success('Welcome back!');
@@ -293,8 +320,15 @@ const Auth: React.FC = () => {
         return;
       }
 
+      // Save the user's role before signing out
+      if (data.user && role) {
+        await supabase.from('user_roles').insert({
+          user_id: data.user.id,
+          role: role as 'user' | 'mechanic',
+        });
+      }
+
       // Always sign out after signup to prevent any auto-login
-      // User MUST verify email before logging in
       await supabase.auth.signOut();
 
       if (data.user) {
