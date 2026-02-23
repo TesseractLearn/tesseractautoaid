@@ -298,18 +298,6 @@ const Auth: React.FC = () => {
       await supabase.auth.signOut();
 
       if (data.user) {
-        try {
-          await supabase.functions.invoke('send-verification-email', {
-            body: {
-              email: normalizedEmail,
-              name: fullName.trim(),
-              verificationUrl: `${window.location.origin}/auth?type=signup`,
-            },
-          });
-        } catch (emailErr) {
-          console.error('Custom email failed, using Supabase default');
-        }
-
         setStep('verification');
         setResendCooldown(30);
         toast.success('Account created! Check your email to verify before logging in.');
@@ -436,17 +424,7 @@ const Auth: React.FC = () => {
         return;
       }
 
-      try {
-        await supabase.functions.invoke('send-verification-email', {
-          body: {
-            email: email.trim().toLowerCase(),
-            name: fullName.trim() || undefined,
-            verificationUrl: `${window.location.origin}/auth?type=signup`,
-          },
-        });
-      } catch (emailErr) {
-        console.error('Custom email failed');
-      }
+
 
       setResendCooldown(30);
       toast.success('Verification email sent!');
