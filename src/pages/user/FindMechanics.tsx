@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, MapPin, Loader2, X, Star, Phone, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, Loader2, X, Star, Phone, CheckCircle2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -25,26 +25,28 @@ const serviceOptions = [
 
 const FindMechanics: React.FC = () => {
   const navigate = useNavigate();
-  const { latitude, longitude, hasLocation, permissionState, requestLocation, loading: gpsLoading } = useGeolocation();
-  const { activeRequest, responses, loading: requestLoading, createRequest, cancelRequest, acceptResponse } = useServiceRequests();
+  const { latitude, longitude, hasLocation } = useGeolocation();
+  const { activeBooking, offers, loading: requestLoading, dispatching, createRequest, cancelRequest } = useServiceRequests();
 
   const [selectedService, setSelectedService] = useState<string>('');
   const [issueDescription, setIssueDescription] = useState('');
   const [step, setStep] = useState<'gps' | 'service' | 'waiting' | 'responses'>('gps');
 
-  // Auto-advance from GPS step once location is available
   React.useEffect(() => {
-    if (hasLocation && step === 'gps') {
-      setStep('service');
-    }
+    if (hasLocation && step === 'gps') setStep('service');
   }, [hasLocation, step]);
 
-  // If there's already an active request, go to waiting
   React.useEffect(() => {
-    if (activeRequest) {
-      setStep(responses.length > 0 ? 'responses' : 'waiting');
+    if (activeBooking) {
+      if (activeBooking.status === 'accepted') {
+        navigate('/user/track');
+      } else if (activeBooking.status === 'no_mechanic_found') {
+        setStep('service');
+      } else {
+        setStep('waiting');
+      }
     }
-  }, [activeRequest, responses.length]);
+  }, [activeBooking, navigate]);
 
   const handleBroadcast = async () => {
     if (!latitude || !longitude || !selectedService) return;
@@ -58,16 +60,9 @@ const FindMechanics: React.FC = () => {
   };
 
   const handleCancel = () => {
-    if (activeRequest) {
-      cancelRequest(activeRequest.id);
+    if (activeBooking) {
+      cancelRequest(activeBooking.id);
       setStep('service');
-    }
-  };
-
-  const handleAcceptMechanic = (responseId: string, mechanicId: string) => {
-    if (activeRequest) {
-      acceptResponse(responseId, mechanicId, activeRequest.id);
-      navigate('/user/track');
     }
   };
 
@@ -96,23 +91,20 @@ const FindMechanics: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="bg-background border-b border-border safe-area-inset-top sticky top-0 z-20">
         <div className="px-4 py-3 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-lg font-semibold">
-            {step === 'service' ? 'Request Service' : step === 'waiting' ? 'Finding Mechanics...' : 'Mechanic Responses'}
+            {step === 'service' ? 'Request Service' : 'Finding Mechanics...'}
           </h1>
         </div>
       </header>
 
       <main className="p-4 space-y-5">
-        {/* Service selection step */}
         {step === 'service' && (
           <>
-            {/* Location indicator */}
             <div className="flex items-center gap-2 bg-success/10 rounded-xl px-4 py-3">
               <MapPin className="w-5 h-5 text-success" />
               <div>
@@ -123,7 +115,6 @@ const FindMechanics: React.FC = () => {
               </div>
             </div>
 
-            {/* Service type selection */}
             <div>
               <h2 className="text-base font-semibold text-foreground mb-3">What do you need?</h2>
               <div className="grid grid-cols-3 gap-3">
@@ -146,7 +137,6 @@ const FindMechanics: React.FC = () => {
               </div>
             </div>
 
-            {/* Issue description */}
             <div>
               <h2 className="text-base font-semibold text-foreground mb-2">Describe your issue (optional)</h2>
               <Textarea
@@ -157,29 +147,26 @@ const FindMechanics: React.FC = () => {
               />
             </div>
 
-            {/* Map preview */}
             <div className="rounded-xl overflow-hidden border border-border h-48">
               <NearbyMechanicsMap />
             </div>
 
-            {/* Broadcast button */}
             <Button
               size="lg"
               className="w-full"
-              disabled={!selectedService || requestLoading}
+              disabled={!selectedService || requestLoading || dispatching}
               onClick={handleBroadcast}
             >
-              {requestLoading ? (
+              {(requestLoading || dispatching) ? (
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
               ) : (
                 <Send className="w-5 h-5 mr-2" />
               )}
-              Send Request to Nearby Mechanics
+              {dispatching ? 'Finding Best Mechanics...' : 'Send Request to Nearby Mechanics'}
             </Button>
           </>
         )}
 
-        {/* Waiting for responses */}
         {step === 'waiting' && (
           <div className="text-center py-12 space-y-6">
             <div className="relative mx-auto w-24 h-24">
@@ -191,77 +178,25 @@ const FindMechanics: React.FC = () => {
             </div>
 
             <div>
-              <h2 className="text-xl font-bold text-foreground">Looking for mechanics...</h2>
+              <h2 className="text-xl font-bold text-foreground">
+                {activeBooking?.status === 'offer_sent' ? 'Offers sent to mechanics!' : 'Searching for mechanics...'}
+              </h2>
               <p className="text-sm text-muted-foreground mt-2">
-                Your request for <span className="font-medium text-primary">{activeRequest?.service_type}</span> has been sent to nearby mechanics.
+                Your <span className="font-medium text-primary">{activeBooking?.service_type}</span> request has been sent to the best-matched mechanics nearby.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                You'll be notified when a mechanic responds
+              <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
+                <Clock className="w-3 h-3" /> Waiting for a mechanic to accept...
               </p>
             </div>
+
+            {activeBooking?.status === 'accepted' && (
+              <div className="bg-success/10 rounded-xl px-4 py-3">
+                <CheckCircle2 className="w-6 h-6 text-success mx-auto mb-1" />
+                <p className="text-sm font-medium text-foreground">Mechanic assigned! Redirecting...</p>
+              </div>
+            )}
 
             <Button variant="outline" onClick={handleCancel} className="mt-4">
-              <X className="w-4 h-4 mr-2" />
-              Cancel Request
-            </Button>
-          </div>
-        )}
-
-        {/* Mechanic responses */}
-        {step === 'responses' && (
-          <div className="space-y-4">
-            <div className="bg-success/10 rounded-xl px-4 py-3 text-center">
-              <CheckCircle2 className="w-6 h-6 text-success mx-auto mb-1" />
-              <p className="text-sm font-medium text-foreground">
-                {responses.length} mechanic{responses.length > 1 ? 's' : ''} responded!
-              </p>
-            </div>
-
-            {responses
-              .filter((r) => r.status === 'accepted')
-              .map((response) => (
-                <div
-                  key={response.id}
-                  className="bg-card rounded-xl p-4 border-2 border-success/30 shadow-md"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${response.mechanic?.full_name}`}
-                      alt={response.mechanic?.full_name}
-                      className="w-12 h-12 rounded-full"
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-foreground">{response.mechanic?.full_name}</h3>
-                      <p className="text-xs text-muted-foreground">{response.mechanic?.specialization || 'General Mechanic'}</p>
-                    </div>
-                    {response.mechanic?.rating && (
-                      <div className="flex items-center gap-1 text-warning">
-                        <Star className="w-4 h-4 fill-current" />
-                        <span className="text-sm font-medium">{response.mechanic.rating}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3">
-                    {response.mechanic?.phone && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={`tel:${response.mechanic.phone}`}>
-                          <Phone className="w-4 h-4 mr-1" /> Call
-                        </a>
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleAcceptMechanic(response.id, response.mechanic_id)}
-                    >
-                      <CheckCircle2 className="w-4 h-4 mr-1" /> Accept
-                    </Button>
-                  </div>
-                </div>
-              ))}
-
-            <Button variant="outline" onClick={handleCancel} className="w-full mt-2">
               <X className="w-4 h-4 mr-2" />
               Cancel Request
             </Button>

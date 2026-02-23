@@ -3,24 +3,31 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-interface IncomingRequest {
+interface IncomingOffer {
   id: string;
-  user_id: string;
-  service_type: string;
-  issue_description: string | null;
-  latitude: number;
-  longitude: number;
-  address: string | null;
+  booking_id: string;
+  mechanic_id: string;
   status: string;
+  score: number;
+  eta_minutes: number | null;
   created_at: string;
-  expires_at: string;
+  booking?: {
+    id: string;
+    service_type: string;
+    issue_description: string | null;
+    latitude: number;
+    longitude: number;
+    address: string | null;
+    user_id: string;
+    status: string;
+  };
   user_name?: string;
 }
 
 export const useMechanicRequests = () => {
   const { user } = useAuth();
   const [mechanicId, setMechanicId] = useState<string | null>(null);
-  const [requests, setRequests] = useState<IncomingRequest[]>([]);
+  const [requests, setRequests] = useState<IncomingOffer[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Get mechanic profile
@@ -37,34 +44,46 @@ export const useMechanicRequests = () => {
     fetchMechanic();
   }, [user]);
 
-  // Fetch pending requests
+  // Fetch pending offers for this mechanic
   const fetchRequests = useCallback(async () => {
     if (!mechanicId) return;
     setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('service_requests')
+      const { data: offers, error } = await supabase
+        .from('booking_offers')
         .select('*')
+        .eq('mechanic_id', mechanicId)
         .eq('status', 'pending');
 
       if (error) throw error;
 
-      // Fetch user profiles for display names
-      const withNames = await Promise.all(
-        (data || []).map(async (req) => {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('user_id', req.user_id)
+      // Fetch booking and user details for each offer
+      const enriched = await Promise.all(
+        (offers || []).map(async (offer) => {
+          const { data: booking } = await supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', offer.booking_id)
             .single();
-          return { ...req, user_name: profile?.full_name || 'Unknown User' };
+
+          let userName = 'Unknown User';
+          if (booking) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('user_id', booking.user_id)
+              .single();
+            userName = profile?.full_name || 'Unknown User';
+          }
+
+          return { ...offer, booking: booking || undefined, user_name: userName };
         })
       );
 
-      setRequests(withNames);
+      setRequests(enriched);
     } catch (err) {
-      console.error('Failed to fetch requests:', err);
+      console.error('Failed to fetch offers:', err);
     } finally {
       setLoading(false);
     }
@@ -74,48 +93,51 @@ export const useMechanicRequests = () => {
     fetchRequests();
   }, [fetchRequests]);
 
-  // Real-time subscription for new requests
+  // Real-time subscription for new offers
   useEffect(() => {
     if (!mechanicId) return;
 
     const channel = supabase
-      .channel('mechanic-incoming-requests')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'service_requests',
-        },
-        async (payload) => {
-          const newReq = payload.new as IncomingRequest;
-          if (newReq.status !== 'pending') return;
+      .channel(`mechanic-offers-${mechanicId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'booking_offers',
+        filter: `mechanic_id=eq.${mechanicId}`,
+      }, async (payload) => {
+        const newOffer = payload.new as IncomingOffer;
+        if (newOffer.status !== 'pending') return;
 
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('id', newOffer.booking_id)
+          .single();
+
+        let userName = 'Unknown User';
+        if (booking) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name')
-            .eq('user_id', newReq.user_id)
+            .eq('user_id', booking.user_id)
             .single();
+          userName = profile?.full_name || 'Unknown User';
+        }
 
-          const withName = { ...newReq, user_name: profile?.full_name || 'Unknown User' };
-          setRequests(prev => [withName, ...prev]);
-          toast.info('🔔 New service request nearby!', { duration: 5000 });
+        setRequests(prev => [{ ...newOffer, booking: booking || undefined, user_name: userName }, ...prev]);
+        toast.info('🔔 New job offer!', { duration: 5000 });
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'booking_offers',
+        filter: `mechanic_id=eq.${mechanicId}`,
+      }, (payload) => {
+        const updated = payload.new as IncomingOffer;
+        if (updated.status !== 'pending') {
+          setRequests(prev => prev.filter(r => r.id !== updated.id));
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'service_requests',
-        },
-        (payload) => {
-          const updated = payload.new as IncomingRequest;
-          if (updated.status !== 'pending') {
-            setRequests(prev => prev.filter(r => r.id !== updated.id));
-          }
-        }
-      )
+      })
       .subscribe();
 
     return () => {
@@ -123,43 +145,41 @@ export const useMechanicRequests = () => {
     };
   }, [mechanicId]);
 
-  // Accept a request
-  const acceptRequest = useCallback(async (requestId: string) => {
+  // Accept an offer via edge function
+  const acceptRequest = useCallback(async (offerId: string) => {
     if (!mechanicId) return;
 
+    const offer = requests.find(r => r.id === offerId);
+    if (!offer) return;
+
     try {
-      // Insert response
-      const { error } = await supabase
-        .from('service_request_responses')
-        .insert({
-          request_id: requestId,
-          mechanic_id: mechanicId,
-          status: 'accepted',
-        });
+      const { data, error } = await supabase.functions.invoke('accept-offer', {
+        body: { bookingId: offer.booking_id, mechanicId },
+      });
 
       if (error) throw error;
-      setRequests(prev => prev.filter(r => r.id !== requestId));
-      toast.success('Request accepted! User has been notified.');
+      if (data?.error) throw new Error(data.error);
+
+      setRequests(prev => prev.filter(r => r.id !== offerId));
+      toast.success('Job accepted! Navigate to the customer.');
     } catch (err: any) {
       toast.error('Failed to accept: ' + err.message);
     }
-  }, [mechanicId]);
+  }, [mechanicId, requests]);
 
-  // Decline a request
-  const declineRequest = useCallback(async (requestId: string) => {
+  // Decline an offer
+  const declineRequest = useCallback(async (offerId: string) => {
     if (!mechanicId) return;
 
     try {
       await supabase
-        .from('service_request_responses')
-        .insert({
-          request_id: requestId,
-          mechanic_id: mechanicId,
-          status: 'rejected',
-        });
+        .from('booking_offers')
+        .update({ status: 'rejected' })
+        .eq('id', offerId)
+        .eq('mechanic_id', mechanicId);
 
-      setRequests(prev => prev.filter(r => r.id !== requestId));
-      toast.info('Request declined');
+      setRequests(prev => prev.filter(r => r.id !== offerId));
+      toast.info('Offer declined');
     } catch (err: any) {
       toast.error('Failed to decline: ' + err.message);
     }
