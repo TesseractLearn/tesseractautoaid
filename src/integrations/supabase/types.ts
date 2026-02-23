@@ -211,6 +211,104 @@ export type Database = {
         }
         Relationships: []
       }
+      service_request_responses: {
+        Row: {
+          created_at: string
+          id: string
+          mechanic_id: string
+          request_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mechanic_id: string
+          request_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mechanic_id?: string
+          request_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_request_responses_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_request_responses_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_requests: {
+        Row: {
+          address: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          issue_description: string | null
+          latitude: number
+          longitude: number
+          radius_km: number | null
+          service_type: string
+          status: string
+          target_mechanic_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          issue_description?: string | null
+          latitude: number
+          longitude: number
+          radius_km?: number | null
+          service_type: string
+          status?: string
+          target_mechanic_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          issue_description?: string | null
+          latitude?: number
+          longitude?: number
+          radius_km?: number | null
+          service_type?: string
+          status?: string
+          target_mechanic_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_requests_target_mechanic_id_fkey"
+            columns: ["target_mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicles: {
         Row: {
           brand: string
