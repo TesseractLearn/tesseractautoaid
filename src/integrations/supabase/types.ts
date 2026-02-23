@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      booking_offers: {
+        Row: {
+          booking_id: string
+          created_at: string
+          eta_minutes: number | null
+          id: string
+          mechanic_id: string
+          score: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          eta_minutes?: number | null
+          id?: string
+          mechanic_id: string
+          score?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          eta_minutes?: number | null
+          id?: string
+          mechanic_id?: string
+          score?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_offers_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_offers_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           address: string | null
@@ -26,6 +74,7 @@ export type Database = {
           latitude: number
           longitude: number
           mechanic_id: string | null
+          priority: string | null
           service_type: string
           status: string
           updated_at: string
@@ -42,6 +91,7 @@ export type Database = {
           latitude: number
           longitude: number
           mechanic_id?: string | null
+          priority?: string | null
           service_type: string
           status?: string
           updated_at?: string
@@ -58,6 +108,7 @@ export type Database = {
           latitude?: number
           longitude?: number
           mechanic_id?: string | null
+          priority?: string | null
           service_type?: string
           status?: string
           updated_at?: string
@@ -75,44 +126,56 @@ export type Database = {
       }
       mechanics: {
         Row: {
+          active_jobs_count: number | null
           address: string | null
           created_at: string
           full_name: string
           id: string
           is_available: boolean | null
+          is_verified: boolean | null
           latitude: number
           longitude: number
           phone: string | null
           rating: number | null
+          recent_jobs_count: number | null
           specialization: string | null
+          total_jobs_count: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          active_jobs_count?: number | null
           address?: string | null
           created_at?: string
           full_name: string
           id?: string
           is_available?: boolean | null
+          is_verified?: boolean | null
           latitude: number
           longitude: number
           phone?: string | null
           rating?: number | null
+          recent_jobs_count?: number | null
           specialization?: string | null
+          total_jobs_count?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          active_jobs_count?: number | null
           address?: string | null
           created_at?: string
           full_name?: string
           id?: string
           is_available?: boolean | null
+          is_verified?: boolean | null
           latitude?: number
           longitude?: number
           phone?: string | null
           rating?: number | null
+          recent_jobs_count?: number | null
           specialization?: string | null
+          total_jobs_count?: number | null
           updated_at?: string
           user_id?: string
         }
