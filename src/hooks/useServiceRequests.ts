@@ -66,7 +66,7 @@ export const useServiceRequests = () => {
   const [mechanicsLoading, setMechanicsLoading] = useState(false);
 
   // Fetch nearby mechanics based on booking location
-  const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 15) => {
+  const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 50) => {
     setMechanicsLoading(true);
     try {
       const { data, error } = await supabase
@@ -76,6 +76,7 @@ export const useServiceRequests = () => {
       if (error) throw error;
 
       const mechanics: NearbyMechanic[] = (data || [])
+        .filter(m => m.user_id !== user?.id) // Exclude own mechanic profile
         .map(m => {
           const dist = haversineDistance(lat, lng, m.latitude, m.longitude);
           return {
@@ -100,7 +101,7 @@ export const useServiceRequests = () => {
     } finally {
       setMechanicsLoading(false);
     }
-  }, []);
+  }, [user]);
 
   // Create a booking and trigger dispatch
   const createRequest = useCallback(async (params: {
