@@ -105,6 +105,10 @@ export const useServiceRequests = () => {
     latitude: number;
     longitude: number;
     address?: string;
+    selectedProblems?: string[];
+    severity?: string;
+    estimatedPriceMin?: number;
+    estimatedPriceMax?: number;
   }) => {
     if (!user) return null;
     setLoading(true);
@@ -120,7 +124,11 @@ export const useServiceRequests = () => {
           longitude: params.longitude,
           address: params.address || null,
           status: 'pending',
-        })
+          selected_problems: params.selectedProblems || [],
+          severity: params.severity || 'medium',
+          estimated_price_min: params.estimatedPriceMin || null,
+          estimated_price_max: params.estimatedPriceMax || null,
+        } as any)
         .select()
         .single();
 
