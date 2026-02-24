@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   User, Phone, MapPin, Star, Shield, ShieldCheck,
-  Loader2, Save, Navigation, Clock, Wrench, CheckCircle2,
+  Loader2, Save, Navigation, Clock, Wrench, CheckCircle2, LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const ALL_SERVICES = [
   { id: 'puncture', label: 'Flat Tire / Puncture' },
@@ -25,6 +26,7 @@ const ALL_SERVICES = [
 ];
 
 const ProfileTab: React.FC = () => {
+  const { logout } = useAuth();
   const { data: mechanic, refetch } = useMechanicProfile();
   const { latitude, longitude, hasLocation, requestLocation, loading: geoLoading } = useGeolocation();
   const { placeName } = useReverseGeocode(latitude, longitude);
@@ -217,6 +219,11 @@ const ProfileTab: React.FC = () => {
       <Button onClick={handleSave} disabled={saving} className="w-full">
         {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
         Save Changes
+      </Button>
+
+      <Button variant="destructive" onClick={logout} className="w-full">
+        <LogOut className="w-4 h-4 mr-2" />
+        Log Out
       </Button>
     </div>
   );
