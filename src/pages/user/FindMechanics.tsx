@@ -5,8 +5,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { useServiceRequests, NearbyMechanic } from '@/hooks/useServiceRequests';
 import LocationPermission from '@/components/LocationPermission';
+import LocationBar from '@/components/LocationBar';
 import NearbyMechanicsMap from '@/components/NearbyMechanicsMap';
 import SymptomPicker from '@/components/SymptomPicker';
 import { computePriceEstimate, computeSeverity } from '@/data/vehicleSymptoms';
@@ -70,7 +72,8 @@ const MechanicCard: React.FC<{
 
 const FindMechanics: React.FC = () => {
   const navigate = useNavigate();
-  const { latitude, longitude, hasLocation } = useGeolocation();
+  const { latitude, longitude, hasLocation, accuracy, source, loading: locationLoading, requestLocation, setManualLocation } = useGeolocation();
+  const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
   const {
     activeBooking,
     offers,
@@ -215,15 +218,18 @@ const FindMechanics: React.FC = () => {
       <main className="p-4 space-y-5 pb-24">
         {step === 'service' && (
           <>
-            <div className="flex items-center gap-2 bg-success/10 rounded-xl px-4 py-3">
-              <MapPin className="w-5 h-5 text-success" />
-              <div>
-                <p className="text-xs text-muted-foreground">GPS Location Active</p>
-                <p className="text-sm font-medium text-foreground">
-                  {latitude?.toFixed(4)}°, {longitude?.toFixed(4)}°
-                </p>
-              </div>
-            </div>
+            <LocationBar
+              latitude={latitude}
+              longitude={longitude}
+              accuracy={accuracy}
+              source={source}
+              placeName={placeName}
+              loading={locationLoading}
+              geocodeLoading={geocodeLoading}
+              hasLocation={hasLocation}
+              onRequestLocation={requestLocation}
+              onManualLocation={setManualLocation}
+            />
 
             <div>
               <h2 className="text-base font-semibold text-foreground mb-3">What do you need?</h2>

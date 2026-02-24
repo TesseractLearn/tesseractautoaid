@@ -5,13 +5,12 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { Button } from '@/components/ui/button';
+import LocationBar from '@/components/LocationBar';
 import { 
-  MapPin, 
   Bell, 
   ChevronRight,
   Clock,
-  Wrench,
-  Loader2
+  Wrench
 } from 'lucide-react';
 import { 
   PunctureIcon, 
@@ -49,10 +48,13 @@ const UserHome: React.FC = () => {
   const { 
     latitude, 
     longitude, 
+    accuracy,
+    source,
     loading: locationLoading, 
     permissionState, 
     hasLocation,
-    requestLocation 
+    requestLocation,
+    setManualLocation,
   } = useGeolocation();
   const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
 
@@ -73,15 +75,7 @@ const UserHome: React.FC = () => {
     { icon: <WrenchIcon size={24} />, name: 'General', description: 'All repairs', path: 'general' },
   ];
 
-  const handleLocationClick = () => {
-    if (!hasLocation) {
-      requestLocation();
-    }
-  };
 
-  const locationDisplay = locationLoading || geocodeLoading
-    ? 'Getting location...'
-    : placeName || (hasLocation ? 'Location found' : 'Tap to enable location');
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,21 +98,18 @@ const UserHome: React.FC = () => {
           </div>
 
           {/* Location Bar */}
-          <button 
-            onClick={handleLocationClick}
-            className="flex items-center gap-2 w-full bg-primary-foreground/10 rounded-xl px-4 py-3 text-left"
-          >
-            {locationLoading || geocodeLoading ? (
-              <Loader2 className="w-5 h-5 text-primary-foreground/80 animate-spin" />
-            ) : (
-              <MapPin className="w-5 h-5 text-primary-foreground/80" />
-            )}
-            <div className="flex-1">
-              <p className="text-xs text-primary-foreground/60">Your location</p>
-              <p className="text-sm font-medium">{locationDisplay}</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-primary-foreground/60" />
-          </button>
+          <LocationBar
+            latitude={latitude}
+            longitude={longitude}
+            accuracy={accuracy}
+            source={source}
+            placeName={placeName}
+            loading={locationLoading}
+            geocodeLoading={geocodeLoading}
+            hasLocation={hasLocation}
+            onRequestLocation={requestLocation}
+            variant="header"
+          />
         </div>
       </header>
 
