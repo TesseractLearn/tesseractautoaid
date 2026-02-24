@@ -1,17 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useReverseGeocode } from '@/hooks/useReverseGeocode';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import LocationBar from '@/components/LocationBar';
 import { 
   Bell, 
   ChevronRight,
   Clock,
-  Wrench
+  Wrench,
+  Loader2,
+  MapPin
 } from 'lucide-react';
+import { format } from 'date-fns';
 import { 
   PunctureIcon, 
   TowingIcon, 
@@ -41,6 +46,22 @@ const ServiceCard: React.FC<ServiceCardProps> = ({ icon, name, description, onCl
   </button>
 );
 
+const statusColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  accepted: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  in_progress: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+};
+
+const statusLabels: Record<string, string> = {
+  pending: 'Pending',
+  accepted: 'Accepted',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
 const UserHome: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -66,6 +87,26 @@ const UserHome: React.FC = () => {
   }, [permissionState, hasLocation, requestLocation]);
 
   const firstName = displayName?.split(' ')[0] || null;
+
+  // Fetch recent bookings
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchRecent = async () => {
+      setBookingsLoading(true);
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, service_type, status, created_at, address, estimated_price, final_price')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setRecentBookings(data || []);
+      setBookingsLoading(false);
+    };
+    fetchRecent();
+  }, [user]);
 
   const services = [
     { icon: <PunctureIcon size={24} />, name: 'Puncture', description: 'Flat tire fix', path: 'puncture' },
@@ -154,14 +195,54 @@ const UserHome: React.FC = () => {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground">Recent Activity</h2>
+            {recentBookings.length > 0 && (
+              <button 
+                className="text-sm text-primary font-medium flex items-center gap-1"
+                onClick={() => navigate('/user/history')}
+              >
+                View all <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
           
           <div className="bg-card rounded-xl p-4 border border-border/50">
-            <div className="text-center py-6">
-              <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No recent bookings</p>
-              <p className="text-xs text-muted-foreground mt-1">Your booking history will appear here</p>
-            </div>
+            {bookingsLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : recentBookings.length === 0 ? (
+              <div className="text-center py-6">
+                <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No recent bookings</p>
+                <p className="text-xs text-muted-foreground mt-1">Your booking history will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentBookings.map((booking) => (
+                  <div key={booking.id} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <Wrench className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground capitalize">
+                        {booking.service_type.replace('_', ' ')} Service
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {booking.address || format(new Date(booking.created_at), 'PPp')}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-medium text-foreground">
+                        ₹{booking.final_price || booking.estimated_price || '—'}
+                      </p>
+                      <Badge className={`text-[10px] px-1.5 py-0 ${statusColors[booking.status] || 'bg-muted text-muted-foreground'}`}>
+                        {statusLabels[booking.status] || booking.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>
