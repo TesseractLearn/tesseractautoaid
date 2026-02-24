@@ -33,6 +33,10 @@ import PrivacySecurity from "./pages/user/PrivacySecurity";
 // Mechanic Pages
 import MechanicHome from "./pages/mechanic/MechanicHome";
 import MechanicRegistration from "./pages/mechanic/MechanicRegistration";
+import MechanicProfile from "./pages/mechanic/MechanicProfile";
+import MechanicJobs from "./pages/mechanic/MechanicJobs";
+import MechanicEarnings from "./pages/mechanic/MechanicEarnings";
+import MechanicStats from "./pages/mechanic/MechanicStats";
 import MechanicGuard from "./components/MechanicGuard";
 
 const queryClient = new QueryClient();
@@ -106,10 +110,10 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<MechanicHome />} />
-              <Route path="jobs" element={<MechanicHome />} />
-              <Route path="earnings" element={<MechanicHome />} />
-              <Route path="stats" element={<MechanicHome />} />
-              <Route path="profile" element={<MechanicHome />} />
+              <Route path="jobs" element={<MechanicJobs />} />
+              <Route path="earnings" element={<MechanicEarnings />} />
+              <Route path="stats" element={<MechanicStats />} />
+              <Route path="profile" element={<MechanicProfile />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
