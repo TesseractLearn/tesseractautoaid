@@ -8,7 +8,7 @@ const corsHeaders = {
 // Algorithm weights from the AutoAid research paper
 const WEIGHTS = { distance: 0.45, rating: 0.25, workload: 0.15, fairness: 0.15 }
 const TOP_K = 3
-const INITIAL_RADIUS_KM = 15
+const INITIAL_RADIUS_KM = 150
 const AVERAGE_SPEED_KMH = 30 // for ETA approximation
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
