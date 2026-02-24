@@ -20,9 +20,13 @@ interface Mechanic {
   distance?: number;
 }
 
+interface NearbyMechanicsMapProps {
+  mechanics?: Mechanic[];
+}
+
 // Calculate distance between two points using Haversine formula
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -35,7 +39,7 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
-const NearbyMechanicsMap: React.FC = () => {
+const NearbyMechanicsMap: React.FC<NearbyMechanicsMapProps> = ({ mechanics: propMechanics }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -62,8 +66,19 @@ const NearbyMechanicsMap: React.FC = () => {
     fetchToken();
   }, []);
 
-  // Fetch all registered mechanics (not just available ones)
+  // Fetch mechanics from DB or use props
   useEffect(() => {
+    if (propMechanics) {
+      // Use provided mechanics data
+      const mechanicsWithDistance = propMechanics.map(m => ({
+        ...m,
+        distance: latitude && longitude ? calculateDistance(latitude, longitude, m.latitude, m.longitude) : 0,
+      })).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      setMechanics(mechanicsWithDistance);
+      setLoading(false);
+      return;
+    }
+
     const fetchMechanics = async () => {
       if (!latitude || !longitude) return;
       
@@ -75,7 +90,6 @@ const NearbyMechanicsMap: React.FC = () => {
 
         if (error) throw error;
 
-        // Calculate distance for each mechanic and sort by distance
         const mechanicsWithDistance = (data || [])
           .map((m) => ({
             ...m,
@@ -93,7 +107,7 @@ const NearbyMechanicsMap: React.FC = () => {
     };
 
     fetchMechanics();
-  }, [latitude, longitude]);
+  }, [latitude, longitude, propMechanics]);
 
   // Initialize map
   useEffect(() => {

@@ -264,7 +264,17 @@ const FindMechanics: React.FC = () => {
             </div>
 
             <div className="rounded-xl overflow-hidden border border-border h-48">
-              <NearbyMechanicsMap />
+              <NearbyMechanicsMap mechanics={nearbyMechanics.map(m => ({
+                id: m.id,
+                full_name: m.full_name,
+                phone: m.phone,
+                specialization: m.specialization,
+                latitude: m.latitude,
+                longitude: m.longitude,
+                address: null,
+                rating: m.rating || 0,
+                distance: m.distance,
+              }))} />
             </div>
 
             {/* Nearby Mechanics List on Service Step */}

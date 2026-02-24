@@ -66,7 +66,7 @@ export const useServiceRequests = () => {
   const [mechanicsLoading, setMechanicsLoading] = useState(false);
 
   // Fetch nearby mechanics based on booking location
-  const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 50) => {
+  const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 150) => {
     setMechanicsLoading(true);
     try {
       const { data, error } = await supabase
