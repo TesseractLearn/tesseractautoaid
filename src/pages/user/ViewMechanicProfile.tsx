@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Star, MapPin, Phone, Wrench, Shield, Clock, Briefcase, User } from 'lucide-react';
+import { ArrowLeft, Star, MapPin, Phone, Wrench, Shield, Clock, Briefcase, User, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface MechanicProfile {
   id: string;
@@ -24,6 +25,14 @@ interface MechanicProfile {
   created_at: string;
 }
 
+interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  user_name: string | null;
+}
+
 const serviceLabels: Record<string, string> = {
   puncture: 'Puncture Repair',
   battery: 'Battery Service',
@@ -40,21 +49,44 @@ const ViewMechanicProfile: React.FC = () => {
   const { mechanicId } = useParams<{ mechanicId: string }>();
   const navigate = useNavigate();
   const [mechanic, setMechanic] = useState<MechanicProfile | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!mechanicId) return;
-    const fetch = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('mechanics')
-        .select('*')
-        .eq('id', mechanicId)
-        .maybeSingle();
-      if (!error && data) setMechanic(data);
+      const [mechRes, revRes] = await Promise.all([
+        supabase.from('mechanics').select('*').eq('id', mechanicId).maybeSingle(),
+        supabase
+          .from('mechanic_reviews')
+          .select('id, rating, comment, created_at, user_id')
+          .eq('mechanic_id', mechanicId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ]);
+      if (!mechRes.error && mechRes.data) setMechanic(mechRes.data);
+
+      if (!revRes.error && revRes.data && revRes.data.length > 0) {
+        const userIds = [...new Set(revRes.data.map((r: any) => r.user_id))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, full_name')
+          .in('user_id', userIds);
+        const nameMap = new Map(profiles?.map((p: any) => [p.user_id, p.full_name]) || []);
+        setReviews(
+          revRes.data.map((r: any) => ({
+            id: r.id,
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.created_at,
+            user_name: nameMap.get(r.user_id) || 'Anonymous',
+          }))
+        );
+      }
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [mechanicId]);
 
   if (loading) {
@@ -205,6 +237,45 @@ const ViewMechanicProfile: React.FC = () => {
               </div>
             )}
             <p className="text-xs text-muted-foreground">Member since {memberSince}</p>
+          </CardContent>
+        </Card>
+
+        {/* Reviews Section */}
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" /> Customer Reviews
+              {reviews.length > 0 && (
+                <Badge variant="secondary" className="text-xs ml-auto">{reviews.length}</Badge>
+              )}
+            </h3>
+            {reviews.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No reviews yet</p>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {reviews.map((review) => (
+                  <div key={review.id} className="border border-border rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">{review.user_name}</span>
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {review.comment && (
+                      <p className="text-xs text-muted-foreground leading-relaxed">{review.comment}</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground/60">
+                      {new Date(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
