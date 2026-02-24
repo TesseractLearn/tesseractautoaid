@@ -2,9 +2,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Button } from '@/components/ui/button';
-import { MapPin, Phone, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2 } from 'lucide-react';
+import { MapPin, Phone, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import PaymentCheckout from '@/components/payment/PaymentCheckout';
+import JobCompletion from '@/components/payment/JobCompletion';
+import PaymentBreakdownCard from '@/components/payment/PaymentBreakdownCard';
 
 interface ActiveBooking {
   id: string;
@@ -12,6 +15,9 @@ interface ActiveBooking {
   service_type: string;
   latitude: number;
   longitude: number;
+  mechanic_quote: number | null;
+  platform_fee: number | null;
+  payment_status: string | null;
   mechanic: {
     id: string;
     full_name: string;
@@ -21,6 +27,14 @@ interface ActiveBooking {
     latitude: number;
     longitude: number;
   } | null;
+  transaction?: {
+    id: string;
+    status: string;
+    mechanic_quote: number;
+    platform_fee: number;
+    user_paid_total: number;
+    mechanic_share: number;
+  } | null;
 }
 
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -29,6 +43,8 @@ const UserTrack: React.FC = () => {
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const navigate = useNavigate();
 
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -51,9 +67,9 @@ const UserTrack: React.FC = () => {
 
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, status, service_type, mechanic_id, latitude, longitude')
+        .select('id, status, service_type, mechanic_id, latitude, longitude, mechanic_quote, platform_fee, payment_status')
         .eq('user_id', user.id)
-        .in('status', ['accepted', 'mechanic_arriving', 'in_progress'])
+        .in('status', ['accepted', 'mechanic_arriving', 'in_progress', 'completed'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -67,7 +83,28 @@ const UserTrack: React.FC = () => {
           .eq('id', data.mechanic_id)
           .maybeSingle();
 
-        setActiveBooking({ ...data, mechanic: mech });
+        // Fetch transaction if exists
+        const { data: tx } = await supabase
+          .from('transactions')
+          .select('id, status, mechanic_quote, platform_fee, user_paid_total, mechanic_share')
+          .eq('booking_id', data.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        setActiveBooking({
+          ...data,
+          mechanic_quote: (data as any).mechanic_quote ?? null,
+          platform_fee: (data as any).platform_fee ?? null,
+          payment_status: (data as any).payment_status ?? null,
+          mechanic: mech,
+          transaction: tx,
+        });
+
+        // Auto-show completion screen
+        if (data.status === 'completed' && tx?.status === 'paid') {
+          setShowCompletion(true);
+        }
       } else {
         setActiveBooking(null);
       }
@@ -295,84 +332,169 @@ const UserTrack: React.FC = () => {
         <div className="w-12 h-1 bg-border rounded-full mx-auto mt-3" />
 
         <div className="p-5 space-y-5">
-          {/* ETA Banner */}
-          {activeBooking.mechanic && activeBooking.status !== 'in_progress' && (
-            <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3">
-              <Clock className="w-6 h-6 text-primary" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">Estimated Arrival</p>
-                <p className="text-lg font-bold text-primary">{getEta(activeBooking.mechanic, activeBooking)}</p>
-              </div>
-            </div>
+          {/* Payment Checkout Overlay */}
+          {showPayment && activeBooking.mechanic && (
+            <PaymentCheckout
+              bookingId={activeBooking.id}
+              mechanicName={activeBooking.mechanic.full_name}
+              mechanicRating={activeBooking.mechanic.rating}
+              serviceType={activeBooking.service_type}
+              estimatedQuote={activeBooking.mechanic_quote || 500}
+              onPaymentComplete={() => {
+                setShowPayment(false);
+                fetchActiveBooking();
+              }}
+              onCancel={() => setShowPayment(false)}
+            />
           )}
 
-          {activeBooking.status === 'in_progress' && (
-            <div className="bg-emerald-500/10 rounded-xl p-4 flex items-center gap-3">
-              <Wrench className="w-6 h-6 text-emerald-600" />
-              <div>
-                <p className="text-sm font-semibold text-foreground">Repair In Progress</p>
-                <p className="text-xs text-muted-foreground">Your mechanic is working on it</p>
-              </div>
-            </div>
+          {/* Job Completion Overlay */}
+          {showCompletion && activeBooking.transaction && activeBooking.mechanic && (
+            <JobCompletion
+              transactionId={activeBooking.transaction.id}
+              mechanicName={activeBooking.mechanic.full_name}
+              mechanicQuote={activeBooking.transaction.mechanic_quote}
+              platformFee={activeBooking.transaction.platform_fee}
+              mechanicShare={activeBooking.transaction.mechanic_share}
+              userPaidTotal={activeBooking.transaction.user_paid_total}
+              onPaymentReleased={() => {
+                setShowCompletion(false);
+                fetchActiveBooking();
+              }}
+              onDispute={() => {
+                setShowCompletion(false);
+                fetchActiveBooking();
+              }}
+            />
           )}
 
-          {/* Mechanic Info */}
-          {activeBooking.mechanic && (
-            <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <img
-                  src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeBooking.mechanic.full_name}`}
-                  alt="Mechanic"
-                  className="w-12 h-12 rounded-full bg-card"
-                />
-                <div>
-                  <p className="font-semibold text-foreground">{activeBooking.mechanic.full_name}</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                    {activeBooking.mechanic.rating > 0 && (
-                      <span className="flex items-center gap-0.5">
-                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                        {Number(activeBooking.mechanic.rating).toFixed(1)}
-                      </span>
-                    )}
-                    {activeBooking.mechanic.specialization && (
-                      <span>• {activeBooking.mechanic.specialization}</span>
-                    )}
+          {/* Normal tracking UI (hidden when payment/completion overlays are shown) */}
+          {!showPayment && !showCompletion && (
+            <>
+              {/* ETA Banner */}
+              {activeBooking.mechanic && activeBooking.status !== 'in_progress' && activeBooking.status !== 'completed' && (
+                <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3">
+                  <Clock className="w-6 h-6 text-primary" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Estimated Arrival</p>
+                    <p className="text-lg font-bold text-primary">{getEta(activeBooking.mechanic, activeBooking)}</p>
                   </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                {activeBooking.mechanic.phone && (
-                  <Button variant="outline" size="icon" asChild>
-                    <a href={`tel:${activeBooking.mechanic.phone}`}>
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  </Button>
-                )}
-                <Button variant="outline" size="icon">
-                  <MessageCircle className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* Progress Steps */}
-          <div className="space-y-3">
-            <ProgressStep
-              label="Booking confirmed"
-              done={true}
-              active={false}
-            />
-            <ProgressStep
-              label="Mechanic on the way"
-              done={activeBooking.status === 'in_progress'}
-              active={activeBooking.status === 'mechanic_arriving' || activeBooking.status === 'accepted'}
-            />
-            <ProgressStep
-              label="Repair in progress"
-              done={false}
-              active={activeBooking.status === 'in_progress'}
-            />
-          </div>
+              {activeBooking.status === 'in_progress' && (
+                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
+                  <Wrench className="w-6 h-6 text-success" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Repair In Progress</p>
+                    <p className="text-xs text-muted-foreground">Your mechanic is working on it</p>
+                  </div>
+                </div>
+              )}
+
+              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
+                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-success" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Job Completed!</p>
+                    <p className="text-xs text-muted-foreground">Review and release payment</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment breakdown (if quote exists) */}
+              {activeBooking.mechanic_quote && activeBooking.mechanic_quote > 0 && (
+                <PaymentBreakdownCard
+                  mechanicQuote={Number(activeBooking.mechanic_quote)}
+                  platformFee={Number(activeBooking.platform_fee || 0)}
+                  userPaysTotal={Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0)}
+                  mechanicShare={Number(activeBooking.mechanic_quote) - Number(activeBooking.platform_fee || 0)}
+                  status={activeBooking.payment_status || undefined}
+                  compact
+                />
+              )}
+
+              {/* Mechanic Info */}
+              {activeBooking.mechanic && (
+                <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${activeBooking.mechanic.full_name}`}
+                      alt="Mechanic"
+                      className="w-12 h-12 rounded-full bg-card"
+                    />
+                    <div>
+                      <p className="font-semibold text-foreground">{activeBooking.mechanic.full_name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        {activeBooking.mechanic.rating > 0 && (
+                          <span className="flex items-center gap-0.5">
+                            <Star className="w-3 h-3 text-warning fill-warning" />
+                            {Number(activeBooking.mechanic.rating).toFixed(1)}
+                          </span>
+                        )}
+                        {activeBooking.mechanic.specialization && (
+                          <span>• {activeBooking.mechanic.specialization}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {activeBooking.mechanic.phone && (
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={`tel:${activeBooking.mechanic.phone}`}>
+                          <Phone className="w-4 h-4" />
+                        </a>
+                      </Button>
+                    )}
+                    <Button variant="outline" size="icon">
+                      <MessageCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Progress Steps */}
+              <div className="space-y-3">
+                <ProgressStep label="Booking confirmed" done={true} active={false} />
+                <ProgressStep
+                  label="Payment received"
+                  done={!!activeBooking.transaction && activeBooking.transaction.status !== 'pending'}
+                  active={activeBooking.payment_status === 'awaiting_payment'}
+                />
+                <ProgressStep
+                  label="Mechanic on the way"
+                  done={activeBooking.status === 'in_progress' || activeBooking.status === 'completed'}
+                  active={activeBooking.status === 'mechanic_arriving' || activeBooking.status === 'accepted'}
+                />
+                <ProgressStep
+                  label="Repair in progress"
+                  done={activeBooking.status === 'completed'}
+                  active={activeBooking.status === 'in_progress'}
+                />
+                <ProgressStep
+                  label="Job completed"
+                  done={activeBooking.transaction?.status === 'released_to_mechanic'}
+                  active={activeBooking.status === 'completed'}
+                />
+              </div>
+
+              {/* Pay Now button */}
+              {activeBooking.payment_status === 'awaiting_payment' && activeBooking.mechanic_quote && (
+                <Button size="lg" className="w-full" onClick={() => setShowPayment(true)}>
+                  <Shield className="w-5 h-5 mr-2" />
+                  Pay ₹{Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0)} Securely
+                </Button>
+              )}
+
+              {/* Release payment button */}
+              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
+                <Button size="lg" className="w-full" onClick={() => setShowCompletion(true)}>
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  Review & Release Payment
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

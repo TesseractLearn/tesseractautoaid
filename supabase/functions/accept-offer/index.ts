@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { bookingId, mechanicId } = await req.json()
+    const { bookingId, mechanicId, quotedPrice } = await req.json()
 
     // Verify caller is this mechanic
     const { data: mechanic } = await supabase
@@ -86,10 +86,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Accept: update booking
+    // Accept: update booking with quote
+    const platformFee = quotedPrice ? Math.max(Math.round(quotedPrice * 0.15), 50) : null
     await supabase
       .from('bookings')
-      .update({ status: 'accepted', mechanic_id: mechanicId })
+      .update({
+        status: 'accepted',
+        mechanic_id: mechanicId,
+        mechanic_quote: quotedPrice || null,
+        platform_fee: platformFee,
+        payment_status: quotedPrice ? 'awaiting_payment' : 'unpaid',
+      })
       .eq('id', bookingId)
 
     // Mark this offer as accepted

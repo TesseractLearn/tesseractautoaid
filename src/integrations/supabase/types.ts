@@ -76,6 +76,9 @@ export type Database = {
           latitude: number
           longitude: number
           mechanic_id: string | null
+          mechanic_quote: number | null
+          payment_status: string | null
+          platform_fee: number | null
           priority: string | null
           selected_problems: string[] | null
           service_type: string
@@ -97,6 +100,9 @@ export type Database = {
           latitude: number
           longitude: number
           mechanic_id?: string | null
+          mechanic_quote?: number | null
+          payment_status?: string | null
+          platform_fee?: number | null
           priority?: string | null
           selected_problems?: string[] | null
           service_type: string
@@ -118,6 +124,9 @@ export type Database = {
           latitude?: number
           longitude?: number
           mechanic_id?: string | null
+          mechanic_quote?: number | null
+          payment_status?: string | null
+          platform_fee?: number | null
           priority?: string | null
           selected_problems?: string[] | null
           service_type?: string
@@ -447,6 +456,90 @@ export type Database = {
           {
             foreignKeyName: "service_requests_target_mechanic_id_fkey"
             columns: ["target_mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          booking_id: string
+          created_at: string
+          dispute_photos: string[] | null
+          dispute_reason: string | null
+          disputed_at: string | null
+          id: string
+          mechanic_id: string
+          mechanic_quote: number
+          mechanic_share: number
+          paid_at: string | null
+          platform_fee: number
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          refunded_at: string | null
+          released_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          user_paid_total: number
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          dispute_photos?: string[] | null
+          dispute_reason?: string | null
+          disputed_at?: string | null
+          id?: string
+          mechanic_id: string
+          mechanic_quote?: number
+          mechanic_share?: number
+          paid_at?: string | null
+          platform_fee?: number
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          refunded_at?: string | null
+          released_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          user_paid_total?: number
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          dispute_photos?: string[] | null
+          dispute_reason?: string | null
+          disputed_at?: string | null
+          id?: string
+          mechanic_id?: string
+          mechanic_quote?: number
+          mechanic_share?: number
+          paid_at?: string | null
+          platform_fee?: number
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          refunded_at?: string | null
+          released_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          user_paid_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_mechanic_id_fkey"
+            columns: ["mechanic_id"]
             isOneToOne: false
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
