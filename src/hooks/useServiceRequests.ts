@@ -68,6 +68,7 @@ export const useServiceRequests = () => {
   // Fetch nearby mechanics based on booking location
   const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 150) => {
     setMechanicsLoading(true);
+    console.log('[FindMechanics] Fetching nearby mechanics at', lat, lng, 'radius:', radiusKm);
     try {
       const { data, error } = await supabase
         .from('mechanics')
@@ -75,8 +76,15 @@ export const useServiceRequests = () => {
 
       if (error) throw error;
 
+      console.log('[FindMechanics] Raw mechanics from DB:', data?.length, data?.map(m => ({ id: m.id, name: m.full_name, user_id: m.user_id, available: m.is_available })));
+      console.log('[FindMechanics] Current user id:', user?.id);
+
       const mechanics: NearbyMechanic[] = (data || [])
-        .filter(m => m.user_id !== user?.id) // Exclude own mechanic profile
+        .filter(m => {
+          const isSelf = m.user_id === user?.id;
+          if (isSelf) console.log('[FindMechanics] Filtering out self:', m.full_name);
+          return !isSelf;
+        })
         .map(m => {
           const dist = haversineDistance(lat, lng, m.latitude, m.longitude);
           return {
@@ -89,15 +97,20 @@ export const useServiceRequests = () => {
             longitude: m.longitude,
             is_available: m.is_available,
             distance: Math.round(dist * 10) / 10,
-            eta_minutes: Math.round((dist / 20) * 60), // ~20km/h avg speed
+            eta_minutes: Math.round((dist / 20) * 60),
           };
         })
-        .filter(m => m.distance <= radiusKm)
+        .filter(m => {
+          const inRadius = m.distance <= radiusKm;
+          if (!inRadius) console.log('[FindMechanics] Filtered by radius:', m.full_name, m.distance, 'km');
+          return inRadius;
+        })
         .sort((a, b) => a.distance - b.distance);
 
+      console.log('[FindMechanics] Final nearby mechanics:', mechanics.length, mechanics.map(m => ({ name: m.full_name, dist: m.distance, available: m.is_available })));
       setNearbyMechanics(mechanics);
     } catch (err) {
-      console.error('Failed to fetch nearby mechanics:', err);
+      console.error('[FindMechanics] Failed to fetch nearby mechanics:', err);
     } finally {
       setMechanicsLoading(false);
     }
