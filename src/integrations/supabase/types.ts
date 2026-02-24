@@ -124,11 +124,60 @@ export type Database = {
           },
         ]
       }
+      mechanic_transactions: {
+        Row: {
+          amount: number
+          booking_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          mechanic_id: string
+          transaction_type: string
+        }
+        Insert: {
+          amount?: number
+          booking_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          mechanic_id: string
+          transaction_type?: string
+        }
+        Update: {
+          amount?: number
+          booking_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          mechanic_id?: string
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mechanic_transactions_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mechanic_transactions_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mechanics: {
         Row: {
           active_jobs_count: number | null
           address: string | null
+          avg_eta: number | null
+          avg_response_time: number | null
           created_at: string
+          documents_url: string | null
+          experience_years: number | null
           full_name: string
           id: string
           is_available: boolean | null
@@ -136,17 +185,25 @@ export type Database = {
           latitude: number
           longitude: number
           phone: string | null
+          profile_photo_url: string | null
           rating: number | null
           recent_jobs_count: number | null
+          services_offered: string[] | null
           specialization: string | null
+          total_earnings: number | null
           total_jobs_count: number | null
+          total_rating_count: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           active_jobs_count?: number | null
           address?: string | null
+          avg_eta?: number | null
+          avg_response_time?: number | null
           created_at?: string
+          documents_url?: string | null
+          experience_years?: number | null
           full_name: string
           id?: string
           is_available?: boolean | null
@@ -154,17 +211,25 @@ export type Database = {
           latitude: number
           longitude: number
           phone?: string | null
+          profile_photo_url?: string | null
           rating?: number | null
           recent_jobs_count?: number | null
+          services_offered?: string[] | null
           specialization?: string | null
+          total_earnings?: number | null
           total_jobs_count?: number | null
+          total_rating_count?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           active_jobs_count?: number | null
           address?: string | null
+          avg_eta?: number | null
+          avg_response_time?: number | null
           created_at?: string
+          documents_url?: string | null
+          experience_years?: number | null
           full_name?: string
           id?: string
           is_available?: boolean | null
@@ -172,10 +237,14 @@ export type Database = {
           latitude?: number
           longitude?: number
           phone?: string | null
+          profile_photo_url?: string | null
           rating?: number | null
           recent_jobs_count?: number | null
+          services_offered?: string[] | null
           specialization?: string | null
+          total_earnings?: number | null
           total_jobs_count?: number | null
+          total_rating_count?: number | null
           updated_at?: string
           user_id?: string
         }
