@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.handle-offer-timeout]
 verify_jwt = false
+
+[functions.user-select-mechanic]
+verify_jwt = false

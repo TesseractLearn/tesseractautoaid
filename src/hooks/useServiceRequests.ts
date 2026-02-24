@@ -32,12 +32,71 @@ interface ActiveBooking {
   created_at: string;
 }
 
+export interface NearbyMechanic {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  specialization: string | null;
+  rating: number | null;
+  latitude: number;
+  longitude: number;
+  is_available: boolean | null;
+  distance: number;
+  eta_minutes: number;
+}
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export const useServiceRequests = () => {
   const { user } = useAuth();
   const [activeBooking, setActiveBooking] = useState<ActiveBooking | null>(null);
   const [offers, setOffers] = useState<BookingOffer[]>([]);
+  const [nearbyMechanics, setNearbyMechanics] = useState<NearbyMechanic[]>([]);
   const [loading, setLoading] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+
+  // Fetch nearby mechanics based on booking location
+  const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 15) => {
+    try {
+      const { data, error } = await supabase
+        .from('mechanics')
+        .select('*');
+
+      if (error) throw error;
+
+      const mechanics: NearbyMechanic[] = (data || [])
+        .map(m => {
+          const dist = haversineDistance(lat, lng, m.latitude, m.longitude);
+          return {
+            id: m.id,
+            full_name: m.full_name,
+            phone: m.phone,
+            specialization: m.specialization,
+            rating: m.rating ? Number(m.rating) : null,
+            latitude: m.latitude,
+            longitude: m.longitude,
+            is_available: m.is_available,
+            distance: Math.round(dist * 10) / 10,
+            eta_minutes: Math.round((dist / 20) * 60), // ~20km/h avg speed
+          };
+        })
+        .filter(m => m.distance <= radiusKm)
+        .sort((a, b) => a.distance - b.distance);
+
+      setNearbyMechanics(mechanics);
+    } catch (err) {
+      console.error('Failed to fetch nearby mechanics:', err);
+    }
+  }, []);
 
   // Create a booking and trigger dispatch
   const createRequest = useCallback(async (params: {
@@ -51,7 +110,6 @@ export const useServiceRequests = () => {
     setLoading(true);
 
     try {
-      // Create booking with pending status
       const { data: booking, error } = await supabase
         .from('bookings')
         .insert({
@@ -68,6 +126,9 @@ export const useServiceRequests = () => {
 
       if (error) throw error;
       setActiveBooking(booking);
+
+      // Fetch nearby mechanics for display
+      fetchNearbyMechanics(params.latitude, params.longitude);
 
       // Trigger dispatch algorithm
       setDispatching(true);
@@ -101,7 +162,29 @@ export const useServiceRequests = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, fetchNearbyMechanics]);
+
+  // User manually selects a mechanic (Path A)
+  const selectMechanic = useCallback(async (mechanicId: string) => {
+    if (!activeBooking) return;
+    setSelecting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
+        body: { bookingId: activeBooking.id, mechanicId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(data?.message || 'Mechanic selected!');
+      setActiveBooking(prev => prev ? { ...prev, status: 'accepted', mechanic_id: mechanicId } : null);
+    } catch (err: any) {
+      toast.error('Failed to select mechanic: ' + err.message);
+    } finally {
+      setSelecting(false);
+    }
+  }, [activeBooking]);
 
   // Cancel a booking
   const cancelRequest = useCallback(async (bookingId: string) => {
@@ -111,7 +194,6 @@ export const useServiceRequests = () => {
         .update({ status: 'cancelled' })
         .eq('id', bookingId);
 
-      // Expire all offers
       await supabase
         .from('booking_offers')
         .update({ status: 'expired' })
@@ -119,6 +201,7 @@ export const useServiceRequests = () => {
 
       setActiveBooking(null);
       setOffers([]);
+      setNearbyMechanics([]);
       toast.info('Request cancelled');
     } catch (err: any) {
       toast.error('Failed to cancel: ' + err.message);
@@ -129,7 +212,6 @@ export const useServiceRequests = () => {
   useEffect(() => {
     if (!activeBooking) return;
 
-    // Fetch existing offers
     const fetchOffers = async () => {
       const { data } = await supabase
         .from('booking_offers')
@@ -137,7 +219,6 @@ export const useServiceRequests = () => {
         .eq('booking_id', activeBooking.id)
         .eq('status', 'accepted');
 
-      // Note: 'accepted' here means mechanic accepted the offer
       if (data && data.length > 0) {
         const withMechanics = await Promise.all(
           data.map(async (o) => {
@@ -155,7 +236,6 @@ export const useServiceRequests = () => {
 
     fetchOffers();
 
-    // Real-time: listen for booking status changes
     const bookingChannel = supabase
       .channel(`booking-${activeBooking.id}`)
       .on('postgres_changes', {
@@ -174,7 +254,6 @@ export const useServiceRequests = () => {
       })
       .subscribe();
 
-    // Real-time: listen for new offer acceptances
     const offersChannel = supabase
       .channel(`booking-offers-${activeBooking.id}`)
       .on('postgres_changes', {
@@ -186,7 +265,6 @@ export const useServiceRequests = () => {
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const offer = payload.new as BookingOffer;
           if (offer.status === 'accepted') {
-            // Mechanic accepted - fetch their details
             const { data: mech } = await supabase
               .from('mechanics')
               .select('*')
@@ -222,18 +300,24 @@ export const useServiceRequests = () => {
         .limit(1)
         .single();
 
-      if (data) setActiveBooking(data);
+      if (data) {
+        setActiveBooking(data);
+        fetchNearbyMechanics(data.latitude, data.longitude);
+      }
     };
 
     checkActive();
-  }, [user]);
+  }, [user, fetchNearbyMechanics]);
 
   return {
     activeBooking,
     offers,
+    nearbyMechanics,
     loading,
     dispatching,
+    selecting,
     createRequest,
     cancelRequest,
+    selectMechanic,
   };
 };
