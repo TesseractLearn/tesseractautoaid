@@ -68,6 +68,8 @@ export type Database = {
           completed_at: string | null
           created_at: string
           estimated_price: number | null
+          estimated_price_max: number | null
+          estimated_price_min: number | null
           final_price: number | null
           id: string
           issue_description: string | null
@@ -75,7 +77,9 @@ export type Database = {
           longitude: number
           mechanic_id: string | null
           priority: string | null
+          selected_problems: string[] | null
           service_type: string
+          severity: string | null
           status: string
           updated_at: string
           user_id: string
@@ -85,6 +89,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           estimated_price?: number | null
+          estimated_price_max?: number | null
+          estimated_price_min?: number | null
           final_price?: number | null
           id?: string
           issue_description?: string | null
@@ -92,7 +98,9 @@ export type Database = {
           longitude: number
           mechanic_id?: string | null
           priority?: string | null
+          selected_problems?: string[] | null
           service_type: string
+          severity?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -102,6 +110,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           estimated_price?: number | null
+          estimated_price_max?: number | null
+          estimated_price_min?: number | null
           final_price?: number | null
           id?: string
           issue_description?: string | null
@@ -109,7 +119,9 @@ export type Database = {
           longitude?: number
           mechanic_id?: string | null
           priority?: string | null
+          selected_problems?: string[] | null
           service_type?: string
+          severity?: string | null
           status?: string
           updated_at?: string
           user_id?: string

@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useServiceRequests, NearbyMechanic } from '@/hooks/useServiceRequests';
 import LocationPermission from '@/components/LocationPermission';
 import NearbyMechanicsMap from '@/components/NearbyMechanicsMap';
+import SymptomPicker from '@/components/SymptomPicker';
+import { computePriceEstimate, computeSeverity } from '@/data/vehicleSymptoms';
 import {
   PunctureIcon,
   TowingIcon,
@@ -81,7 +82,7 @@ const FindMechanics: React.FC = () => {
   } = useServiceRequests();
 
   const [selectedService, setSelectedService] = useState<string>('');
-  const [issueDescription, setIssueDescription] = useState('');
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [step, setStep] = useState<'gps' | 'service' | 'waiting' | 'responses'>('gps');
 
   React.useEffect(() => {
@@ -102,11 +103,17 @@ const FindMechanics: React.FC = () => {
 
   const handleBroadcast = async () => {
     if (!latitude || !longitude || !selectedService) return;
+    const price = computePriceEstimate(selectedSymptoms);
+    const severity = computeSeverity(selectedSymptoms);
     const result = await createRequest({
       serviceType: selectedService,
-      issueDescription: issueDescription || undefined,
+      issueDescription: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : undefined,
       latitude,
       longitude,
+      selectedProblems: selectedSymptoms,
+      severity,
+      estimatedPriceMin: price.min || undefined,
+      estimatedPriceMax: price.max || undefined,
     });
     if (result) setStep('waiting');
   };
@@ -197,12 +204,12 @@ const FindMechanics: React.FC = () => {
             </div>
 
             <div>
-              <h2 className="text-base font-semibold text-foreground mb-2">Describe your issue (optional)</h2>
-              <Textarea
-                placeholder="e.g. Front left tire is flat, need immediate help..."
-                value={issueDescription}
-                onChange={(e) => setIssueDescription(e.target.value)}
-                rows={3}
+              <h2 className="text-base font-semibold text-foreground mb-2">What's wrong with your vehicle?</h2>
+              <p className="text-xs text-muted-foreground mb-3">Select all symptoms so the mechanic comes prepared</p>
+              <SymptomPicker
+                selectedSymptoms={selectedSymptoms}
+                onSymptomsChange={setSelectedSymptoms}
+                serviceType={selectedService}
               />
             </div>
 
