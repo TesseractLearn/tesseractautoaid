@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, MapPin, Loader2, X, Star, Phone, CheckCircle2, Clock } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import { useServiceRequests } from '@/hooks/useServiceRequests';
+import { useServiceRequests, NearbyMechanic } from '@/hooks/useServiceRequests';
 import LocationPermission from '@/components/LocationPermission';
 import NearbyMechanicsMap from '@/components/NearbyMechanicsMap';
 import {
@@ -23,10 +23,62 @@ const serviceOptions = [
   { id: 'general', name: 'General', icon: <WrenchIcon size={20} /> },
 ];
 
+const MechanicCard: React.FC<{
+  mechanic: NearbyMechanic;
+  onSelect: () => void;
+  selecting: boolean;
+}> = ({ mechanic, onSelect, selecting }) => (
+  <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
+    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+      <User className="w-6 h-6 text-primary" />
+    </div>
+    <div className="flex-1 min-w-0">
+      <h3 className="font-semibold text-sm text-foreground truncate">{mechanic.full_name}</h3>
+      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+        {mechanic.rating != null && mechanic.rating > 0 && (
+          <span className="flex items-center gap-0.5">
+            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+            {Number(mechanic.rating).toFixed(1)}
+          </span>
+        )}
+        <span>{mechanic.distance}km</span>
+        <span className="flex items-center gap-0.5">
+          <Clock className="w-3 h-3" />
+          ~{mechanic.eta_minutes}min
+        </span>
+      </div>
+      {mechanic.specialization && (
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">{mechanic.specialization}</p>
+      )}
+    </div>
+    <div className="flex flex-col items-end gap-1">
+      {mechanic.is_available && (
+        <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Online
+        </span>
+      )}
+      <Button size="sm" onClick={onSelect} disabled={selecting} className="text-xs h-8">
+        {selecting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Select'}
+      </Button>
+    </div>
+  </div>
+);
+
 const FindMechanics: React.FC = () => {
   const navigate = useNavigate();
   const { latitude, longitude, hasLocation } = useGeolocation();
-  const { activeBooking, offers, loading: requestLoading, dispatching, createRequest, cancelRequest } = useServiceRequests();
+  const {
+    activeBooking,
+    offers,
+    nearbyMechanics,
+    loading: requestLoading,
+    dispatching,
+    selecting,
+    createRequest,
+    cancelRequest,
+    selectMechanic,
+  } = useServiceRequests();
 
   const [selectedService, setSelectedService] = useState<string>('');
   const [issueDescription, setIssueDescription] = useState('');
@@ -66,6 +118,13 @@ const FindMechanics: React.FC = () => {
     }
   };
 
+  const handleSelectMechanic = (mechanicId: string) => {
+    selectMechanic(mechanicId);
+  };
+
+  const onlineMechanics = nearbyMechanics.filter(m => m.is_available);
+  const offlineMechanics = nearbyMechanics.filter(m => !m.is_available);
+
   // GPS permission step
   if (step === 'gps' && !hasLocation) {
     return (
@@ -102,7 +161,7 @@ const FindMechanics: React.FC = () => {
         </div>
       </header>
 
-      <main className="p-4 space-y-5">
+      <main className="p-4 space-y-5 pb-24">
         {step === 'service' && (
           <>
             <div className="flex items-center gap-2 bg-success/10 rounded-xl px-4 py-3">
@@ -168,35 +227,84 @@ const FindMechanics: React.FC = () => {
         )}
 
         {step === 'waiting' && (
-          <div className="text-center py-12 space-y-6">
-            <div className="relative mx-auto w-24 h-24">
-              <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping" />
-              <div className="absolute inset-2 rounded-full border-4 border-primary/40 animate-ping" style={{ animationDelay: '0.5s' }} />
-              <div className="absolute inset-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <Send className="w-8 h-8 text-primary" />
+          <div className="space-y-6">
+            {/* Status Header */}
+            <div className="text-center py-6 space-y-4">
+              <div className="relative mx-auto w-20 h-20">
+                <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping" />
+                <div className="absolute inset-2 rounded-full border-4 border-primary/40 animate-ping" style={{ animationDelay: '0.5s' }} />
+                <div className="absolute inset-4 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Radio className="w-6 h-6 text-primary" />
+                </div>
               </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-foreground">
+                  {activeBooking?.status === 'offer_sent' ? 'Offers sent to mechanics!' : 'Searching for mechanics...'}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your <span className="font-medium text-primary">{activeBooking?.service_type}</span> request is live
+                </p>
+              </div>
+
+              {/* Live Stats */}
+              <div className="flex justify-center gap-4">
+                <div className="bg-card rounded-lg px-4 py-2 border border-border">
+                  <p className="text-lg font-bold text-foreground">{nearbyMechanics.length}</p>
+                  <p className="text-[10px] text-muted-foreground">Nearby</p>
+                </div>
+                <div className="bg-card rounded-lg px-4 py-2 border border-border">
+                  <p className="text-lg font-bold text-emerald-600">{onlineMechanics.length}</p>
+                  <p className="text-[10px] text-muted-foreground">Online</p>
+                </div>
+              </div>
+
+              {activeBooking?.status === 'accepted' && (
+                <div className="bg-success/10 rounded-xl px-4 py-3">
+                  <CheckCircle2 className="w-6 h-6 text-success mx-auto mb-1" />
+                  <p className="text-sm font-medium text-foreground">Mechanic assigned! Redirecting...</p>
+                </div>
+              )}
             </div>
 
-            <div>
-              <h2 className="text-xl font-bold text-foreground">
-                {activeBooking?.status === 'offer_sent' ? 'Offers sent to mechanics!' : 'Searching for mechanics...'}
-              </h2>
-              <p className="text-sm text-muted-foreground mt-2">
-                Your <span className="font-medium text-primary">{activeBooking?.service_type}</span> request has been sent to the best-matched mechanics nearby.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1">
-                <Clock className="w-3 h-3" /> Waiting for a mechanic to accept...
-              </p>
-            </div>
+            {/* Nearby Mechanics List */}
+            {nearbyMechanics.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold text-foreground">Nearby Mechanics</h3>
+                  <span className="text-xs text-muted-foreground">{nearbyMechanics.length} found</span>
+                </div>
+                
+                <p className="text-xs text-muted-foreground mb-3">
+                  Select a mechanic manually or wait for one to accept your request
+                </p>
 
-            {activeBooking?.status === 'accepted' && (
-              <div className="bg-success/10 rounded-xl px-4 py-3">
-                <CheckCircle2 className="w-6 h-6 text-success mx-auto mb-1" />
-                <p className="text-sm font-medium text-foreground">Mechanic assigned! Redirecting...</p>
+                <div className="space-y-3">
+                  {onlineMechanics.map(m => (
+                    <MechanicCard
+                      key={m.id}
+                      mechanic={m}
+                      onSelect={() => handleSelectMechanic(m.id)}
+                      selecting={selecting}
+                    />
+                  ))}
+                  {offlineMechanics.length > 0 && onlineMechanics.length > 0 && (
+                    <p className="text-xs text-muted-foreground pt-2">Offline mechanics</p>
+                  )}
+                  {offlineMechanics.map(m => (
+                    <div key={m.id} className="opacity-50">
+                      <MechanicCard
+                        mechanic={m}
+                        onSelect={() => {}}
+                        selecting={false}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            <Button variant="outline" onClick={handleCancel} className="mt-4">
+            <Button variant="outline" onClick={handleCancel} className="w-full">
               <X className="w-4 h-4 mr-2" />
               Cancel Request
             </Button>
