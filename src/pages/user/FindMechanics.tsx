@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -76,14 +78,23 @@ const FindMechanics: React.FC = () => {
     loading: requestLoading,
     dispatching,
     selecting,
+    mechanicsLoading,
     createRequest,
     cancelRequest,
     selectMechanic,
+    fetchNearbyMechanics,
   } = useServiceRequests();
 
   const [selectedService, setSelectedService] = useState<string>('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [step, setStep] = useState<'gps' | 'service' | 'waiting' | 'responses'>('gps');
+
+  // Fetch nearby mechanics as soon as we have GPS
+  React.useEffect(() => {
+    if (hasLocation && latitude && longitude && !activeBooking) {
+      fetchNearbyMechanics(latitude, longitude);
+    }
+  }, [hasLocation, latitude, longitude, activeBooking, fetchNearbyMechanics]);
 
   React.useEffect(() => {
     if (hasLocation && step === 'gps') setStep('service');
@@ -129,8 +140,41 @@ const FindMechanics: React.FC = () => {
     selectMechanic(mechanicId);
   };
 
+  // Direct select (from service step - creates booking + assigns mechanic)
+  const handleDirectSelect = async (mechanicId: string) => {
+    if (!latitude || !longitude || !selectedService) {
+      toast.error('Please select a service type first');
+      return;
+    }
+    const price = computePriceEstimate(selectedSymptoms);
+    const severity = computeSeverity(selectedSymptoms);
+    const booking = await createRequest({
+      serviceType: selectedService,
+      issueDescription: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : undefined,
+      latitude,
+      longitude,
+      selectedProblems: selectedSymptoms,
+      severity,
+      estimatedPriceMin: price.min || undefined,
+      estimatedPriceMax: price.max || undefined,
+    });
+    if (booking) {
+      // Now select the mechanic for this booking
+      const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
+        body: { bookingId: booking.id, mechanicId },
+      });
+      if (error || data?.error) {
+        toast.error('Failed to assign mechanic: ' + (data?.error || error?.message));
+      } else {
+        toast.success('Mechanic selected! They are on their way.');
+        navigate('/user/track');
+      }
+    }
+  };
+
   const onlineMechanics = nearbyMechanics.filter(m => m.is_available);
   const offlineMechanics = nearbyMechanics.filter(m => !m.is_available);
+  const hasMechanics = nearbyMechanics.length > 0;
 
   // GPS permission step
   if (step === 'gps' && !hasLocation) {
@@ -216,6 +260,54 @@ const FindMechanics: React.FC = () => {
             <div className="rounded-xl overflow-hidden border border-border h-48">
               <NearbyMechanicsMap />
             </div>
+
+            {/* Nearby Mechanics List on Service Step */}
+            {mechanicsLoading && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
+                <span className="text-sm text-muted-foreground">Finding nearby mechanics...</span>
+              </div>
+            )}
+
+            {!mechanicsLoading && hasMechanics && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-base font-semibold text-foreground">Nearby Mechanics</h2>
+                  <span className="text-xs text-muted-foreground">
+                    {onlineMechanics.length} online · {nearbyMechanics.length} total
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Select a mechanic directly or broadcast your request to all nearby
+                </p>
+                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                  {onlineMechanics.map(m => (
+                    <MechanicCard
+                      key={m.id}
+                      mechanic={m}
+                      onSelect={() => handleDirectSelect(m.id)}
+                      selecting={selecting}
+                    />
+                  ))}
+                  {offlineMechanics.length > 0 && onlineMechanics.length > 0 && (
+                    <p className="text-xs text-muted-foreground pt-2">Currently offline</p>
+                  )}
+                  {offlineMechanics.map(m => (
+                    <div key={m.id} className="opacity-50">
+                      <MechanicCard mechanic={m} onSelect={() => {}} selecting={false} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!mechanicsLoading && !hasMechanics && (
+              <div className="text-center py-4 bg-card rounded-xl border border-border">
+                <User className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No mechanics found nearby</p>
+                <p className="text-xs text-muted-foreground mt-1">Try broadcasting your request — mechanics may respond</p>
+              </div>
+            )}
 
             <Button
               size="lg"
