@@ -4,6 +4,16 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { useServiceRequests, NearbyMechanic } from '@/hooks/useServiceRequests';
@@ -96,6 +106,7 @@ const FindMechanics: React.FC = () => {
   const [selectedService, setSelectedService] = useState<string>('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [step, setStep] = useState<'gps' | 'service' | 'waiting' | 'responses'>('gps');
+  const [showBroadcastConfirm, setShowBroadcastConfirm] = useState(false);
 
   // Fetch nearby mechanics as soon as we have GPS
   React.useEffect(() => {
@@ -303,7 +314,7 @@ const FindMechanics: React.FC = () => {
                 size="lg"
                 className="w-full"
                 disabled={!selectedService || requestLoading || dispatching}
-                onClick={handleBroadcast}
+                onClick={() => setShowBroadcastConfirm(true)}
               >
                 {(requestLoading || dispatching) ? (
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -390,6 +401,31 @@ const FindMechanics: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-1">Try broadcasting your request — mechanics may respond</p>
               </div>
             )}
+
+            {/* Broadcast Confirmation Dialog */}
+            <AlertDialog open={showBroadcastConfirm} onOpenChange={setShowBroadcastConfirm}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Broadcast Service Request?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will send your <strong className="text-foreground">{selectedService}</strong> request to all nearby mechanics.
+                    {selectedSymptoms.length > 0 && (
+                      <span className="block mt-1">Issues: {selectedSymptoms.join(', ')}</span>
+                    )}
+                    {onlineMechanics.length > 0 && (
+                      <span className="block mt-1">{onlineMechanics.length} mechanic{onlineMechanics.length > 1 ? 's' : ''} currently online nearby.</span>
+                    )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleBroadcast}>
+                    <Send className="w-4 h-4 mr-2" />
+                    Confirm Broadcast
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         )}
 
