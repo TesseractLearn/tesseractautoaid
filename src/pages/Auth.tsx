@@ -244,10 +244,12 @@ const Auth: React.FC = () => {
       if (role) {
         const { data: userData } = await supabase.auth.getUser();
         if (userData?.user) {
+          const userId = userData.user.id;
+
           const { data: roleData } = await supabase
             .from('user_roles')
             .select('role')
-            .eq('user_id', userData.user.id)
+            .eq('user_id', userId)
             .maybeSingle();
 
           if (roleData && roleData.role !== role) {
@@ -258,11 +260,28 @@ const Auth: React.FC = () => {
             return;
           }
 
-          // If no role exists yet (e.g. old account), assign current role
+          // If no role in user_roles yet, determine from mechanics table
           if (!roleData) {
+            const { data: mechanicData } = await supabase
+              .from('mechanics')
+              .select('id')
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            const actualRole = mechanicData ? 'mechanic' : 'user';
+
+            if (actualRole !== role) {
+              await supabase.auth.signOut();
+              setPassword('');
+              const otherRole = actualRole === 'user' ? 'Vehicle Owner' : 'Mechanic';
+              setError(`This email is registered as a ${otherRole}. Please use a different email or select the correct role.`);
+              return;
+            }
+
+            // Assign the correct role
             await supabase.from('user_roles').insert({
-              user_id: userData.user.id,
-              role: role as 'user' | 'mechanic',
+              user_id: userId,
+              role: actualRole as 'user' | 'mechanic',
             });
           }
         }
