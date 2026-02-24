@@ -32,13 +32,18 @@ const MechanicCard: React.FC<{
   mechanic: NearbyMechanic;
   onSelect: () => void;
   selecting: boolean;
-}> = ({ mechanic, onSelect, selecting }) => (
+  onViewProfile?: () => void;
+}> = ({ mechanic, onSelect, selecting, onViewProfile }) => (
   <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
-    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+    <div
+      className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all"
+      onClick={onViewProfile}
+      title="View profile"
+    >
       <User className="w-6 h-6 text-primary" />
     </div>
-    <div className="flex-1 min-w-0">
-      <h3 className="font-semibold text-sm text-foreground truncate">{mechanic.full_name}</h3>
+    <div className="flex-1 min-w-0 cursor-pointer" onClick={onViewProfile}>
+      <h3 className="font-semibold text-sm text-foreground truncate hover:underline">{mechanic.full_name}</h3>
       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
         {mechanic.rating != null && mechanic.rating > 0 && (
           <span className="flex items-center gap-0.5">
@@ -310,6 +315,7 @@ const FindMechanics: React.FC = () => {
                       mechanic={m}
                       onSelect={() => handleDirectSelect(m.id)}
                       selecting={selecting}
+                      onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                     />
                   ))}
                   {offlineMechanics.length > 0 && onlineMechanics.length > 0 && (
@@ -317,7 +323,7 @@ const FindMechanics: React.FC = () => {
                   )}
                   {offlineMechanics.map(m => (
                     <div key={m.id} className="opacity-50">
-                      <MechanicCard mechanic={m} onSelect={() => {}} selecting={false} />
+                      <MechanicCard mechanic={m} onSelect={() => {}} selecting={false} onViewProfile={() => navigate(`/user/mechanic/${m.id}`)} />
                     </div>
                   ))}
                 </div>
@@ -408,6 +414,7 @@ const FindMechanics: React.FC = () => {
                       mechanic={m}
                       onSelect={() => handleSelectMechanic(m.id)}
                       selecting={selecting}
+                      onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                     />
                   ))}
                   {offlineMechanics.length > 0 && onlineMechanics.length > 0 && (
@@ -419,6 +426,7 @@ const FindMechanics: React.FC = () => {
                         mechanic={m}
                         onSelect={() => {}}
                         selecting={false}
+                        onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                       />
                     </div>
                   ))}
