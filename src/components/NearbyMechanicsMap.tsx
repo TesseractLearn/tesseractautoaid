@@ -217,7 +217,7 @@ const NearbyMechanicsMap: React.FC<NearbyMechanicsMapProps> = ({ mechanics: prop
   }
 
   return (
-    <div className="relative h-[calc(100vh-180px)]">
+    <div className="relative h-full" style={{ minHeight: '100%' }}>
       {/* Map Container */}
       <div ref={mapContainer} className="absolute inset-0 rounded-xl overflow-hidden" />
 

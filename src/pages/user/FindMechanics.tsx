@@ -95,9 +95,15 @@ const FindMechanics: React.FC = () => {
   // Fetch nearby mechanics as soon as we have GPS
   React.useEffect(() => {
     if (hasLocation && latitude && longitude && !activeBooking) {
+      console.log('[FindMechanics] Has location, fetching nearby mechanics:', latitude, longitude);
       fetchNearbyMechanics(latitude, longitude);
     }
   }, [hasLocation, latitude, longitude, activeBooking, fetchNearbyMechanics]);
+
+  // Debug: log mechanic list state
+  React.useEffect(() => {
+    console.log('[FindMechanics] nearbyMechanics updated:', nearbyMechanics.length, nearbyMechanics);
+  }, [nearbyMechanics]);
 
   React.useEffect(() => {
     if (hasLocation && step === 'gps') setStep('service');
@@ -145,6 +151,7 @@ const FindMechanics: React.FC = () => {
 
   // Direct select (from service step - creates booking + assigns mechanic)
   const handleDirectSelect = async (mechanicId: string) => {
+    console.log('[FindMechanics] User selected mechanic:', mechanicId, 'service:', selectedService);
     if (!latitude || !longitude || !selectedService) {
       toast.error('Please select a service type first');
       return;
