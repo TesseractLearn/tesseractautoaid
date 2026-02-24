@@ -63,9 +63,11 @@ export const useServiceRequests = () => {
   const [loading, setLoading] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [selecting, setSelecting] = useState(false);
+  const [mechanicsLoading, setMechanicsLoading] = useState(false);
 
   // Fetch nearby mechanics based on booking location
   const fetchNearbyMechanics = useCallback(async (lat: number, lng: number, radiusKm = 15) => {
+    setMechanicsLoading(true);
     try {
       const { data, error } = await supabase
         .from('mechanics')
@@ -95,6 +97,8 @@ export const useServiceRequests = () => {
       setNearbyMechanics(mechanics);
     } catch (err) {
       console.error('Failed to fetch nearby mechanics:', err);
+    } finally {
+      setMechanicsLoading(false);
     }
   }, []);
 
@@ -324,8 +328,10 @@ export const useServiceRequests = () => {
     loading,
     dispatching,
     selecting,
+    mechanicsLoading,
     createRequest,
     cancelRequest,
     selectMechanic,
+    fetchNearbyMechanics,
   };
 };
