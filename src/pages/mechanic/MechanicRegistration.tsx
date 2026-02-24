@@ -6,28 +6,30 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, MapPin, Wrench, Phone, User, Navigation, CheckCircle } from 'lucide-react';
+import { Loader2, MapPin, Wrench, Phone, User, Navigation, CheckCircle, CheckCircle2 } from 'lucide-react';
 import autoaidLogo from '@/assets/autoaid-logo.png';
 
 const registrationSchema = z.object({
   fullName: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
   phone: z.string().trim().min(10, 'Enter a valid phone number').max(15),
-  specialization: z.string().min(1, 'Select a specialization'),
+  specializations: z.array(z.string()).min(1, 'Select at least one specialization'),
   address: z.string().trim().min(5, 'Enter a valid address').max(300),
 });
 
 const specializations = [
-  'General Mechanic',
-  'Puncture Repair',
-  'Battery & Electrical',
-  'Engine Specialist',
-  'AC Repair',
-  'Denting & Painting',
-  'Towing Service',
-  'Oil & Lube Service',
+  { id: 'general', label: 'General Mechanic' },
+  { id: 'puncture', label: 'Puncture Repair' },
+  { id: 'battery', label: 'Battery & Electrical' },
+  { id: 'engine', label: 'Engine Specialist' },
+  { id: 'ac_repair', label: 'AC Repair' },
+  { id: 'denting', label: 'Denting & Painting' },
+  { id: 'towing', label: 'Towing Service' },
+  { id: 'oil_service', label: 'Oil & Lube Service' },
 ];
+
+const ALL_IDS = specializations.map(s => s.id);
 
 const MechanicRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -36,7 +38,7 @@ const MechanicRegistration: React.FC = () => {
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [specialization, setSpecialization] = useState('');
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
   const [address, setAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -59,7 +61,7 @@ const MechanicRegistration: React.FC = () => {
     setError('');
 
     // Validate
-    const result = registrationSchema.safeParse({ fullName, phone, specialization, address });
+    const result = registrationSchema.safeParse({ fullName, phone, specializations: selectedSpecs, address });
     if (!result.success) {
       setError(result.error.errors[0].message);
       return;
@@ -82,7 +84,8 @@ const MechanicRegistration: React.FC = () => {
         user_id: user.id,
         full_name: fullName.trim(),
         phone: phone.trim(),
-        specialization,
+        specialization: selectedSpecs.length === ALL_IDS.length ? 'All Services' : specializations.find(s => s.id === selectedSpecs[0])?.label || selectedSpecs[0],
+        services_offered: selectedSpecs,
         address: address.trim(),
         latitude: latitude!,
         longitude: longitude!,
@@ -160,18 +163,52 @@ const MechanicRegistration: React.FC = () => {
           {/* Specialization */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-white/70 flex items-center gap-2">
-              <Wrench className="w-4 h-4" /> Specialization
+              <Wrench className="w-4 h-4" /> Specializations
             </label>
-            <Select value={specialization} onValueChange={setSpecialization}>
-              <SelectTrigger className="bg-white/[0.08] border-white/[0.1] text-white rounded-xl h-12">
-                <SelectValue placeholder="Select your specialization" />
-              </SelectTrigger>
-              <SelectContent>
-                {specializations.map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <p className="text-xs text-white/40">Select all that apply</p>
+            <div className="flex flex-wrap gap-2">
+              {/* All option */}
+              <Badge
+                variant={selectedSpecs.length === ALL_IDS.length ? 'default' : 'outline'}
+                className={`cursor-pointer transition-all px-3 py-1.5 text-sm ${
+                  selectedSpecs.length === ALL_IDS.length
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-white/[0.06] border-white/[0.15] text-white/70 hover:border-primary/50'
+                }`}
+                onClick={() => {
+                  setSelectedSpecs(prev =>
+                    prev.length === ALL_IDS.length ? [] : [...ALL_IDS]
+                  );
+                }}
+              >
+                {selectedSpecs.length === ALL_IDS.length && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                All Services
+              </Badge>
+              {specializations.map((s) => {
+                const active = selectedSpecs.includes(s.id);
+                return (
+                  <Badge
+                    key={s.id}
+                    variant={active ? 'default' : 'outline'}
+                    className={`cursor-pointer transition-all px-3 py-1.5 text-sm ${
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-white/[0.06] border-white/[0.15] text-white/70 hover:border-primary/50'
+                    }`}
+                    onClick={() => {
+                      setSelectedSpecs(prev =>
+                        prev.includes(s.id)
+                          ? prev.filter(x => x !== s.id)
+                          : [...prev, s.id]
+                      );
+                    }}
+                  >
+                    {active && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                    {s.label}
+                  </Badge>
+                );
+              })}
+            </div>
           </div>
 
           {/* Address */}
