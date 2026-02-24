@@ -306,7 +306,9 @@ const FindMechanics: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Select a mechanic directly or broadcast your request to all nearby
+                  {!selectedService
+                    ? 'Select a service above before choosing a mechanic'
+                    : 'Select a mechanic directly or broadcast your request to all nearby'}
                 </p>
                 <div className="space-y-3 max-h-[300px] overflow-y-auto">
                   {onlineMechanics.map(m => (
@@ -314,7 +316,7 @@ const FindMechanics: React.FC = () => {
                       key={m.id}
                       mechanic={m}
                       onSelect={() => handleDirectSelect(m.id)}
-                      selecting={selecting}
+                      selecting={selecting || !selectedService}
                       onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                     />
                   ))}
