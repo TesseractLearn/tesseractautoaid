@@ -297,20 +297,71 @@ const FindMechanics: React.FC = () => {
               </div>
             )}
 
+            {/* Two clear options: Broadcast or Select */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!selectedService || requestLoading || dispatching}
+                onClick={handleBroadcast}
+              >
+                {(requestLoading || dispatching) ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : (
+                  <Send className="w-5 h-5 mr-2" />
+                )}
+                {dispatching ? 'Sending...' : 'Broadcast'}
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full"
+                disabled={!selectedService || !hasMechanics}
+                onClick={() => {
+                  const el = document.getElementById('mechanic-list');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <User className="w-5 h-5 mr-2" />
+                Select Manually
+              </Button>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border p-3">
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Send className="w-3.5 h-3.5 text-primary" />
+                  <span><strong className="text-foreground">Broadcast</strong> — Send to all nearby mechanics, fastest response</span>
+                </div>
+              </div>
+              <div className="flex gap-4 text-xs text-muted-foreground mt-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-3.5 h-3.5 text-primary" />
+                  <span><strong className="text-foreground">Select</strong> — Choose a specific mechanic from the list below</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Nearby Mechanics List */}
+            {mechanicsLoading && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
+                <span className="text-sm text-muted-foreground">Finding nearby mechanics...</span>
+              </div>
+            )}
+
             {!mechanicsLoading && hasMechanics && (
-              <div>
+              <div id="mechanic-list">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-base font-semibold text-foreground">Nearby Mechanics</h2>
                   <span className="text-xs text-muted-foreground">
                     {onlineMechanics.length} online · {nearbyMechanics.length} total
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  {!selectedService
-                    ? 'Select a service above before choosing a mechanic'
-                    : 'Select a mechanic directly or broadcast your request to all nearby'}
-                </p>
-                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {!selectedService && (
+                  <p className="text-xs text-destructive mb-3">⚠ Select a service above first</p>
+                )}
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
                   {onlineMechanics.map(m => (
                     <MechanicCard
                       key={m.id}
@@ -339,20 +390,6 @@ const FindMechanics: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-1">Try broadcasting your request — mechanics may respond</p>
               </div>
             )}
-
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!selectedService || requestLoading || dispatching}
-              onClick={handleBroadcast}
-            >
-              {(requestLoading || dispatching) ? (
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              ) : (
-                <Send className="w-5 h-5 mr-2" />
-              )}
-              {dispatching ? 'Finding Best Mechanics...' : 'Send Request to Nearby Mechanics'}
-            </Button>
           </>
         )}
 
