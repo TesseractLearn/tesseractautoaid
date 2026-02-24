@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMechanicProfile } from '@/hooks/useMechanicProfile';
@@ -122,13 +122,65 @@ const MechanicHome: React.FC = () => {
     ? 'Getting location...'
     : placeName || (hasLocation ? 'Location found' : 'Tap to enable location');
 
-  const services = [
-    { icon: <PunctureIcon size={24} />, name: 'Puncture', description: 'Flat tire fix' },
-    { icon: <BatteryIcon size={24} />, name: 'Battery', description: 'Jump start' },
-    { icon: <TowingIcon size={24} />, name: 'Towing', description: 'Vehicle tow' },
-    { icon: <EngineIcon size={24} />, name: 'Engine', description: 'Engine issues' },
-    { icon: <WrenchIcon size={24} />, name: 'General', description: 'All repairs' },
-  ];
+  // Dynamic services from mechanic profile
+  const serviceLabels: Record<string, { name: string; description: string }> = {
+    puncture: { name: 'Puncture', description: 'Flat tire fix' },
+    battery: { name: 'Battery', description: 'Jump start' },
+    towing: { name: 'Towing', description: 'Vehicle tow' },
+    engine: { name: 'Engine', description: 'Engine issues' },
+    general: { name: 'General', description: 'All repairs' },
+    ac_repair: { name: 'AC Repair', description: 'Cooling fix' },
+    oil_service: { name: 'Oil & Lube', description: 'Oil change' },
+    denting: { name: 'Denting', description: 'Body work' },
+  };
+
+  const serviceIconComponents: Record<string, React.ReactNode> = {
+    puncture: <PunctureIcon size={24} />,
+    battery: <BatteryIcon size={24} />,
+    towing: <TowingIcon size={24} />,
+    engine: <EngineIcon size={24} />,
+    general: <WrenchIcon size={24} />,
+    ac_repair: <WrenchIcon size={24} />,
+    oil_service: <WrenchIcon size={24} />,
+    denting: <WrenchIcon size={24} />,
+  };
+
+  const services = useMemo(() => {
+    const offered = mechanic?.services_offered as string[] | null;
+    if (offered && offered.length > 0) {
+      return offered.map(id => ({
+        icon: serviceIconComponents[id] || <WrenchIcon size={24} />,
+        name: serviceLabels[id]?.name || id,
+        description: serviceLabels[id]?.description || '',
+      }));
+    }
+    // Fallback for mechanics without services_offered set
+    return Object.entries(serviceLabels).slice(0, 5).map(([id, info]) => ({
+      icon: serviceIconComponents[id],
+      name: info.name,
+      description: info.description,
+    }));
+  }, [mechanic?.services_offered]);
+
+  // Fetch recent jobs
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!mechanic?.id) return;
+    const fetchRecentJobs = async () => {
+      setJobsLoading(true);
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, service_type, status, created_at, final_price, estimated_price, address')
+        .eq('mechanic_id', mechanic.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setRecentJobs(data || []);
+      setJobsLoading(false);
+    };
+    fetchRecentJobs();
+  }, [mechanic?.id]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -350,11 +402,37 @@ const MechanicHome: React.FC = () => {
           </div>
           
           <div className="bg-card rounded-xl p-4 border border-border/50">
-            <div className="text-center py-6">
-              <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No recent jobs</p>
-              <p className="text-xs text-muted-foreground mt-1">Your job history will appear here</p>
-            </div>
+            {jobsLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : recentJobs.length === 0 ? (
+              <div className="text-center py-6">
+                <Clock className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No recent jobs</p>
+                <p className="text-xs text-muted-foreground mt-1">Your job history will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentJobs.map((job) => (
+                  <div key={job.id} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      {serviceIconMap[job.service_type] || <WrenchIcon size={16} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground capitalize">{job.service_type.replace('_', ' ')}</p>
+                      <p className="text-xs text-muted-foreground truncate">{job.address || 'No address'}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-medium text-foreground">₹{job.final_price || job.estimated_price || '—'}</p>
+                      <p className={`text-[10px] font-medium capitalize ${job.status === 'completed' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                        {job.status}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </main>
