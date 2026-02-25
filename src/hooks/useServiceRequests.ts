@@ -35,7 +35,6 @@ interface ActiveBooking {
 export interface NearbyMechanic {
   id: string;
   full_name: string;
-  phone: string | null;
   specialization: string | null;
   rating: number | null;
   latitude: number;
@@ -72,7 +71,7 @@ export const useServiceRequests = () => {
     try {
       const { data, error } = await supabase
         .from('mechanics')
-        .select('*');
+        .select('id, user_id, full_name, specialization, latitude, longitude, rating, is_available, is_verified, address, services_offered, profile_photo_url, experience_years, total_jobs_count, total_rating_count, active_jobs_count, recent_jobs_count, avg_response_time, avg_eta, total_earnings, created_at, updated_at');
 
       if (error) throw error;
 
@@ -90,7 +89,6 @@ export const useServiceRequests = () => {
           return {
             id: m.id,
             full_name: m.full_name,
-            phone: m.phone,
             specialization: m.specialization,
             rating: m.rating ? Number(m.rating) : null,
             latitude: m.latitude,

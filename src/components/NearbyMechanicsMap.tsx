@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import { Loader2, MapPin, Navigation, RefreshCw, Phone, Wrench } from 'lucide-react';
+import { Loader2, MapPin, Navigation, RefreshCw, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 interface Mechanic {
   id: string;
   full_name: string;
-  phone: string | null;
   specialization: string | null;
   latitude: number;
   longitude: number;
@@ -86,7 +85,7 @@ const NearbyMechanicsMap: React.FC<NearbyMechanicsMapProps> = ({ mechanics: prop
       try {
         const { data, error } = await supabase
           .from('mechanics')
-          .select('*');
+          .select('id, user_id, full_name, specialization, latitude, longitude, rating, is_available, address, services_offered, profile_photo_url');
 
         if (error) throw error;
 
@@ -284,16 +283,6 @@ const NearbyMechanicsMap: React.FC<NearbyMechanicsMapProps> = ({ mechanics: prop
               </Button>
             </div>
             <div className="flex gap-2 mt-4">
-              {selectedMechanic.phone && (
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => window.open(`tel:${selectedMechanic.phone}`, '_self')}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call
-                </Button>
-              )}
               <Button className="flex-1">
                 Book Now
               </Button>
