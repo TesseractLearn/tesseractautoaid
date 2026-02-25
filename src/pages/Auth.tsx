@@ -58,39 +58,38 @@ const Auth: React.FC = () => {
   const [isCheckingRole, setIsCheckingRole] = useState(false);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
-  // Health check: verify backend is reachable on mount & clear stale tokens
+  // AGGRESSIVE stale session cleanup on auth page mount
   useEffect(() => {
-    const checkBackend = async () => {
-      try {
-        // Clear any stale Supabase tokens that might poison requests
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          // Verify the session is actually valid by calling getUser
-          const { error: userError } = await supabase.auth.getUser();
-          if (userError) {
-            console.warn('Stale session detected on auth page, clearing:', userError.message);
-            await supabase.auth.signOut().catch(() => {});
-            for (const key of Object.keys(localStorage)) {
-              if (key.startsWith('sb-')) localStorage.removeItem(key);
-            }
-          }
-        }
+    const cleanupAndCheck = async () => {
+      // Step 1: Immediately clear ALL Supabase auth tokens from storage
+      // This is safe on the login page — if user was already authenticated,
+      // they wouldn't be here. Stale tokens are the #1 cause of "network error".
+      const sbKeys = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
+      if (sbKeys.length > 0) {
+        console.log('Auth page: clearing', sbKeys.length, 'stale sb- keys');
+        sbKeys.forEach(k => localStorage.removeItem(k));
+      }
+      // Also clear from sessionStorage
+      Object.keys(sessionStorage).filter(k => k.startsWith('sb-'))
+        .forEach(k => sessionStorage.removeItem(k));
 
-        // Simple health ping to the Supabase REST endpoint
+      // Step 2: Force sign out to reset the in-memory Supabase auth state
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+
+      // Step 3: Health check — verify backend is reachable
+      try {
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/`, {
           method: 'HEAD',
           headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
         });
         setBackendReachable(res.ok);
-        if (!res.ok) {
-          console.error('Backend health check failed:', res.status);
-        }
+        if (!res.ok) console.error('Backend health check failed:', res.status);
       } catch (err) {
         console.error('Backend unreachable:', err);
         setBackendReachable(false);
       }
     };
-    checkBackend();
+    cleanupAndCheck();
   }, []);
   useEffect(() => {
     const mode = searchParams.get('mode');
