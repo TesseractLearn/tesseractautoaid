@@ -93,33 +93,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // THEN check for existing session (and verify it is still valid AND verified)
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      if (!session) {
-        setSession(null);
-        setUser(null);
+        if (sessionError || !session) {
+          // If getSession itself fails (e.g. stale refresh token), clear everything
+          if (sessionError) {
+            console.warn('Session recovery failed, clearing stale auth:', sessionError.message);
+            await supabase.auth.signOut().catch(() => {});
+            // Also clear Supabase storage keys manually in case signOut fails
+            for (const key of Object.keys(localStorage)) {
+              if (key.startsWith('sb-')) localStorage.removeItem(key);
+            }
+          }
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        const { data: { user }, error } = await supabase.auth.getUser();
+
+        // If the account was deleted, token invalid, or EMAIL NOT VERIFIED - clear auth
+        if (error || !user || !user.email_confirmed_at) {
+          await supabase.auth.signOut().catch(() => {});
+          setSession(null);
+          setUser(null);
+          setRoleState(null);
+          localStorage.removeItem('autoaid_role');
+          setIsLoading(false);
+          return;
+        }
+
+        setSession(session);
+        setUser(user);
+        // Sync role from DB
+        await syncRoleFromDB(user.id);
         setIsLoading(false);
-        return;
-      }
-
-      const { data: { user }, error } = await supabase.auth.getUser();
-
-      // If the account was deleted, token invalid, or EMAIL NOT VERIFIED - clear auth
-      if (error || !user || !user.email_confirmed_at) {
-        await supabase.auth.signOut();
+      } catch (err) {
+        // Network failure during session check — clear stale tokens so user can sign in fresh
+        console.warn('Auth initialization failed, clearing stale session:', err);
+        await supabase.auth.signOut().catch(() => {});
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('sb-')) localStorage.removeItem(key);
+        }
         setSession(null);
         setUser(null);
         setRoleState(null);
         localStorage.removeItem('autoaid_role');
         setIsLoading(false);
-        return;
       }
-
-      setSession(session);
-      setUser(user);
-      // Sync role from DB
-      await syncRoleFromDB(user.id);
-      setIsLoading(false);
     })();
 
     return () => subscription.unsubscribe();
