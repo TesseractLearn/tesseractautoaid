@@ -58,38 +58,33 @@ const Auth: React.FC = () => {
   const [isCheckingRole, setIsCheckingRole] = useState(false);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
-  // AGGRESSIVE stale session cleanup on auth page mount
+  // Clean stale auth state and verify backend on mount
   useEffect(() => {
-    const cleanupAndCheck = async () => {
-      // Step 1: Immediately clear ALL Supabase auth tokens from storage
-      // This is safe on the login page — if user was already authenticated,
-      // they wouldn't be here. Stale tokens are the #1 cause of "network error".
-      const sbKeys = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
-      if (sbKeys.length > 0) {
-        console.log('Auth page: clearing', sbKeys.length, 'stale sb- keys');
-        sbKeys.forEach(k => localStorage.removeItem(k));
-      }
-      // Also clear from sessionStorage
+    const init = async () => {
+      // Silently clear stale Supabase tokens — safe on login page
+      Object.keys(localStorage).filter(k => k.startsWith('sb-'))
+        .forEach(k => localStorage.removeItem(k));
       Object.keys(sessionStorage).filter(k => k.startsWith('sb-'))
         .forEach(k => sessionStorage.removeItem(k));
-
-      // Step 2: Force sign out to reset the in-memory Supabase auth state
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
 
-      // Step 3: Health check — verify backend is reachable
+      // Health check using GET (HEAD can be blocked by some proxies)
       try {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/`, {
-          method: 'HEAD',
-          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-        });
-        setBackendReachable(res.ok);
-        if (!res.ok) console.error('Backend health check failed:', res.status);
-      } catch (err) {
-        console.error('Backend unreachable:', err);
-        setBackendReachable(false);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/?apikey=${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          { method: 'GET', signal: controller.signal }
+        );
+        clearTimeout(timeout);
+        setBackendReachable(res.ok || res.status === 401 || res.status === 406);
+      } catch {
+        // If health check fails, still allow login — the Supabase SDK
+        // uses its own fetch path which may work even if direct fetch doesn't
+        setBackendReachable(true);
       }
     };
-    cleanupAndCheck();
+    init();
   }, []);
   useEffect(() => {
     const mode = searchParams.get('mode');
@@ -197,12 +192,8 @@ const Auth: React.FC = () => {
         const isNetworkError = msg.includes('failed to fetch') || msg.includes('networkerror') || ((error as any).__isAuthError && (error as any).status === 0);
 
         if (isNetworkError) {
-          // Clear stale tokens and retry once
-          console.error('Email check network error, clearing stale tokens:', error.message);
-          for (const key of Object.keys(localStorage)) {
-            if (key.startsWith('sb-')) localStorage.removeItem(key);
-          }
-          setError('Connection issue. Stale session cleared — please try again.');
+          console.error('Email check network error:', error.message);
+          setError('Unable to reach server. Please refresh the page and try again.');
         } else if (msg.includes('invalid login credentials')) {
           setIsExistingUser(true);
           setStep('login-password');
@@ -225,11 +216,7 @@ const Auth: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Email check exception:', err);
-      // Clear stale tokens on network failure
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('sb-')) localStorage.removeItem(key);
-      }
-      setError('Connection issue. Stale session cleared — please try again.');
+      setError('Unable to reach server. Please refresh the page and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -253,15 +240,6 @@ const Auth: React.FC = () => {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      
-      // Pre-clear any stale sb- tokens before attempting sign-in
-      // This prevents the autoRefreshToken mechanism from poisoning the request
-      const existingKeys = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
-      if (existingKeys.length > 0) {
-        console.log('Clearing stale auth tokens before sign-in attempt');
-        await supabase.auth.signOut().catch(() => {});
-        existingKeys.forEach(k => localStorage.removeItem(k));
-      }
 
       const { error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
@@ -276,11 +254,7 @@ const Auth: React.FC = () => {
         setPassword('');
 
         if (isNetworkError) {
-          // Clear tokens again and show actionable message
-          for (const key of Object.keys(localStorage)) {
-            if (key.startsWith('sb-')) localStorage.removeItem(key);
-          }
-          setError('Server connection failed. Stale session cleared — please try signing in again.');
+          setError('Unable to reach server. Please refresh the page and try again.');
         } else if (msg.includes('invalid login credentials')) {
           if (isExistingUser) {
             setError('Incorrect password. Please try again.');
@@ -355,11 +329,7 @@ const Auth: React.FC = () => {
     } catch (err: any) {
       console.error('Login exception:', err);
       setPassword('');
-      // Clear stale tokens on any error
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('sb-')) localStorage.removeItem(key);
-      }
-      setError(`Login failed: ${err?.message || 'Unknown error. Please try again.'}`);
+      setError(`Login failed: ${err?.message || 'Please refresh the page and try again.'}`);
     } finally {
       setIsLoading(false);
       setIsCheckingRole(false);
