@@ -58,20 +58,13 @@ const Auth: React.FC = () => {
   const [isCheckingRole, setIsCheckingRole] = useState(false);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
-  // Clean stale auth state and verify backend on mount
+  // Verify backend reachability on mount (no longer clears tokens aggressively)
   useEffect(() => {
     const init = async () => {
-      // Silently clear stale Supabase tokens — safe on login page
-      Object.keys(localStorage).filter(k => k.startsWith('sb-'))
-        .forEach(k => localStorage.removeItem(k));
-      Object.keys(sessionStorage).filter(k => k.startsWith('sb-'))
-        .forEach(k => sessionStorage.removeItem(k));
-      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-
-      // Health check using GET (HEAD can be blocked by some proxies)
+      // Health check — allow generous timeout for slow mobile networks
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 8000);
         const res = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/?apikey=${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           { method: 'GET', signal: controller.signal }
