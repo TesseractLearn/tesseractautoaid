@@ -60,6 +60,13 @@ export type Database = {
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "booking_offers_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bookings: {
@@ -143,6 +150,13 @@ export type Database = {
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bookings_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       mechanic_reviews: {
@@ -188,6 +202,13 @@ export type Database = {
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "mechanic_reviews_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       mechanic_transactions: {
@@ -231,6 +252,13 @@ export type Database = {
             columns: ["mechanic_id"]
             isOneToOne: false
             referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mechanic_transactions_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
             referencedColumns: ["id"]
           },
         ]
@@ -443,6 +471,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "service_request_responses_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "service_request_responses_request_id_fkey"
             columns: ["request_id"]
             isOneToOne: false
@@ -503,6 +538,13 @@ export type Database = {
             columns: ["target_mechanic_id"]
             isOneToOne: false
             referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_requests_target_mechanic_id_fkey"
+            columns: ["target_mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
             referencedColumns: ["id"]
           },
         ]
@@ -589,6 +631,13 @@ export type Database = {
             referencedRelation: "mechanics"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -653,7 +702,81 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      mechanics_public: {
+        Row: {
+          active_jobs_count: number | null
+          address: string | null
+          avg_eta: number | null
+          avg_response_time: number | null
+          created_at: string | null
+          experience_years: number | null
+          full_name: string | null
+          id: string | null
+          is_available: boolean | null
+          is_verified: boolean | null
+          latitude: number | null
+          longitude: number | null
+          profile_photo_url: string | null
+          rating: number | null
+          recent_jobs_count: number | null
+          services_offered: string[] | null
+          specialization: string | null
+          total_earnings: number | null
+          total_jobs_count: number | null
+          total_rating_count: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          active_jobs_count?: number | null
+          address?: string | null
+          avg_eta?: number | null
+          avg_response_time?: number | null
+          created_at?: string | null
+          experience_years?: number | null
+          full_name?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          is_verified?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          profile_photo_url?: string | null
+          rating?: number | null
+          recent_jobs_count?: number | null
+          services_offered?: string[] | null
+          specialization?: string | null
+          total_earnings?: number | null
+          total_jobs_count?: number | null
+          total_rating_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          active_jobs_count?: number | null
+          address?: string | null
+          avg_eta?: number | null
+          avg_response_time?: number | null
+          created_at?: string | null
+          experience_years?: number | null
+          full_name?: string | null
+          id?: string | null
+          is_available?: boolean | null
+          is_verified?: boolean | null
+          latitude?: number | null
+          longitude?: number | null
+          profile_photo_url?: string | null
+          rating?: number | null
+          recent_jobs_count?: number | null
+          services_offered?: string[] | null
+          specialization?: string | null
+          total_earnings?: number | null
+          total_jobs_count?: number | null
+          total_rating_count?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_user_role: { Args: { _user_id: string }; Returns: string }
