@@ -106,9 +106,10 @@ const Auth: React.FC = () => {
   // Redirect if authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated && !isResetMode && !isCheckingRole && step !== 'reset-password') {
+      console.log('[Auth] Redirect check - role:', role, 'isAuthenticated:', isAuthenticated);
       if (role === 'user') navigate('/user', { replace: true });
       else if (role === 'mechanic') navigate('/mechanic', { replace: true });
-      else navigate('/', { replace: true });
+      else navigate('/role-selection', { replace: true });
     }
   }, [isAuthenticated, authLoading, role, navigate, isResetMode, isCheckingRole, step]);
 
@@ -135,9 +136,12 @@ const Auth: React.FC = () => {
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      console.log('[Login] Attempting sign in for:', normalizedEmail);
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail, password,
       });
+
+      console.log('[Login] Result:', { user: signInData?.user?.id, session: !!signInData?.session, error: signInError?.message });
 
       if (signInError) {
         setPassword('');
@@ -146,7 +150,7 @@ const Auth: React.FC = () => {
         } else {
           const msg = signInError.message.toLowerCase();
           if (msg.includes('invalid login credentials')) {
-            setError('Incorrect password. Please try again.');
+            setError('Incorrect email or password. Please try again.');
           } else if (msg.includes('email not confirmed')) {
             setStep('verification');
             setResendCooldown(0);

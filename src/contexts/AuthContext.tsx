@@ -81,7 +81,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Sync role + profile on sign-in
         if (newSession?.user?.email_confirmed_at &&
-          (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+      (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          console.log('[Auth] Event:', event, 'email_confirmed:', newSession.user.email_confirmed_at);
           setTimeout(() => {
             syncRoleFromDB(newSession.user.id);
             ensureProfileExists(newSession.user);
