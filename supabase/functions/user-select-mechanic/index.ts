@@ -131,7 +131,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('user-select-mechanic error:', err)
+    return new Response(JSON.stringify({ error: 'Failed to select mechanic' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }

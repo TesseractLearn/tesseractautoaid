@@ -19,11 +19,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRoleState] = useState<UserRole | null>(() => {
-    // Restore role from localStorage
+    // Restore role from localStorage as initial hint (will be verified from DB)
     const savedRole = localStorage.getItem('autoaid_role');
     return (savedRole as UserRole) || null;
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch role from database and sync with localStorage
+  const syncRoleFromDB = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (data?.role) {
+        setRoleState(data.role as UserRole);
+        localStorage.setItem('autoaid_role', data.role);
+      }
+    } catch (err) {
+      console.error('Error fetching user role from DB:', err);
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -45,6 +63,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Avoid prematurely marking auth as "done" before we verify the stored session.
         if (event !== 'INITIAL_SESSION') {
           setIsLoading(false);
+        }
+
+        // Sync role from DB on sign-in
+        if (
+          session?.user &&
+          session.user.email_confirmed_at &&
+          (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
+        ) {
+          // Defer to avoid Supabase deadlock
+          setTimeout(() => {
+            syncRoleFromDB(session.user.id);
+          }, 0);
         }
 
         // Handle profile creation for OAuth users (OAuth users are auto-verified)
@@ -87,6 +117,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setSession(session);
       setUser(user);
+      // Sync role from DB
+      await syncRoleFromDB(user.id);
       setIsLoading(false);
     })();
 

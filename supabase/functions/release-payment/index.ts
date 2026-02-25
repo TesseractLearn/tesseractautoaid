@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error('release-payment error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: 'Failed to release payment' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }

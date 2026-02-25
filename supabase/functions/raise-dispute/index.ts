@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error('raise-dispute error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: 'Failed to raise dispute' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
