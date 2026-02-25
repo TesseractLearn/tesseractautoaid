@@ -19,13 +19,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRoleState] = useState<UserRole | null>(() => {
-    // Restore role from localStorage as initial hint (will be verified from DB)
-    const savedRole = localStorage.getItem('autoaid_role');
-    return (savedRole as UserRole) || null;
+    const saved = localStorage.getItem('autoaid_role');
+    return (saved as UserRole) || null;
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch role from database and sync with localStorage
   const syncRoleFromDB = async (userId: string) => {
     try {
       const { data } = await supabase
@@ -33,23 +31,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .select('role')
         .eq('user_id', userId)
         .maybeSingle();
-      
       if (data?.role) {
         setRoleState(data.role as UserRole);
         localStorage.setItem('autoaid_role', data.role);
       }
     } catch (err) {
-      console.error('Error fetching user role from DB:', err);
+      console.error('Error fetching user role:', err);
+    }
+  };
+
+  const ensureProfileExists = async (authUser: User) => {
+    try {
+      const { data: existing } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+
+      if (!existing) {
+        const fullName = authUser.user_metadata?.full_name ||
+          authUser.user_metadata?.name ||
+          authUser.email?.split('@')[0] || 'User';
+        await supabase.from('profiles').insert({ user_id: authUser.id, full_name: fullName });
+      }
+    } catch (err) {
+      console.error('Error ensuring profile:', err);
     }
   };
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // 1. Set up auth listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // STRICT: Only accept sessions for verified users
-        if (session?.user && !session.user.email_confirmed_at) {
-          // Unverified user - sign them out immediately
+      (event, newSession) => {
+        // Reject unverified email users
+        if (newSession?.user && !newSession.user.email_confirmed_at) {
           supabase.auth.signOut();
           setSession(null);
           setUser(null);
@@ -57,138 +72,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
 
-        setSession(session);
-        setUser(session?.user ?? null);
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
 
-        // Avoid prematurely marking auth as "done" before we verify the stored session.
         if (event !== 'INITIAL_SESSION') {
           setIsLoading(false);
         }
 
-        // Sync role from DB on sign-in
-        if (
-          session?.user &&
-          session.user.email_confirmed_at &&
-          (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')
-        ) {
-          // Defer to avoid Supabase deadlock
+        // Sync role + profile on sign-in
+        if (newSession?.user?.email_confirmed_at &&
+          (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
           setTimeout(() => {
-            syncRoleFromDB(session.user.id);
-          }, 0);
-        }
-
-        // Handle profile creation for OAuth users (OAuth users are auto-verified)
-        if (
-          session?.user &&
-          session.user.email_confirmed_at &&
-          (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION')
-        ) {
-          // Defer the profile check to avoid Supabase deadlock
-          setTimeout(() => {
-            ensureProfileExists(session.user);
+            syncRoleFromDB(newSession.user.id);
+            ensureProfileExists(newSession.user);
           }, 0);
         }
       }
     );
 
-    // THEN check for existing session (and verify it is still valid AND verified)
-    (async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (!session) {
-          // No session at all — user isn't logged in, that's fine
-          if (sessionError) {
-            // Only clear tokens if it's a definitive auth error (not network)
-            const msg = sessionError.message?.toLowerCase() || '';
-            const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') || msg.includes('abort');
-            if (!isNetworkError) {
-              console.warn('Session invalid, clearing auth:', sessionError.message);
-              await supabase.auth.signOut().catch(() => {});
-            } else {
-              console.warn('Network issue during getSession, not clearing tokens:', sessionError.message);
-            }
-          }
-          setSession(null);
-          setUser(null);
-          setIsLoading(false);
-          return;
-        }
-
-        const { data: { user }, error } = await supabase.auth.getUser();
-
-        // Only clear auth for definitive errors (invalid token, deleted account, unverified)
-        // NOT for network timeouts
-        if (error) {
-          const msg = error.message?.toLowerCase() || '';
-          const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') || msg.includes('abort');
-          if (isNetworkError) {
-            // Network issue — keep session, don't destroy tokens
-            console.warn('Network issue during getUser, keeping session');
-            setSession(session);
-            setUser(session.user);
-            await syncRoleFromDB(session.user.id).catch(() => {});
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        if (error || !user || !user.email_confirmed_at) {
-          await supabase.auth.signOut().catch(() => {});
-          setSession(null);
-          setUser(null);
-          setRoleState(null);
-          localStorage.removeItem('autoaid_role');
-          setIsLoading(false);
-          return;
-        }
-
-        setSession(session);
-        setUser(user);
-        // Sync role from DB
-        await syncRoleFromDB(user.id);
+    // 2. Check existing session
+    supabase.auth.getSession().then(({ data: { session: existingSession }, error }) => {
+      if (error || !existingSession) {
+        // No session — that's fine, user just isn't logged in
+        setSession(null);
+        setUser(null);
         setIsLoading(false);
-      } catch (err) {
-        // Network failure during session check — do NOT clear tokens.
-        // The session may still be valid; the network might recover.
-        // The onAuthStateChange listener will handle future state changes.
-        console.warn('Auth initialization: network issue, keeping existing session:', err);
-        // Still mark loading as done so the UI isn't stuck on a spinner
-        setIsLoading(false);
+        return;
       }
-    })();
+
+      // Verify the session is still valid with getUser
+      supabase.auth.getUser().then(({ data: { user: verifiedUser }, error: userError }) => {
+        if (userError || !verifiedUser || !verifiedUser.email_confirmed_at) {
+          // Check if it's a network error — if so, trust the cached session
+          const msg = userError?.message?.toLowerCase() || '';
+          const isNetwork = msg.includes('fetch') || msg.includes('network') || msg.includes('timeout');
+
+          if (isNetwork && existingSession.user) {
+            // Network issue — keep the cached session, don't destroy tokens
+            setSession(existingSession);
+            setUser(existingSession.user);
+            syncRoleFromDB(existingSession.user.id).catch(() => {});
+          } else {
+            // Genuine auth error — clear session
+            supabase.auth.signOut().catch(() => {});
+            setSession(null);
+            setUser(null);
+            setRoleState(null);
+            localStorage.removeItem('autoaid_role');
+          }
+        } else {
+          setSession(existingSession);
+          setUser(verifiedUser);
+          syncRoleFromDB(verifiedUser.id);
+        }
+        setIsLoading(false);
+      });
+    }).catch(() => {
+      // Network failure — don't clear anything, just finish loading
+      setIsLoading(false);
+    });
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Ensure profile exists for OAuth users (Google, etc.)
-  const ensureProfileExists = async (user: User) => {
-    try {
-      // Check if profile already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!existingProfile) {
-        // Create profile from OAuth data
-        const fullName = user.user_metadata?.full_name || 
-                         user.user_metadata?.name || 
-                         user.email?.split('@')[0] || 
-                         'User';
-        
-        await supabase
-          .from('profiles')
-          .insert({
-            user_id: user.id,
-            full_name: fullName,
-          });
-      }
-    } catch (err) {
-      console.error('Error ensuring profile exists:', err);
-    }
-  };
 
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
@@ -203,17 +148,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('autoaid_role');
   };
 
-  const isAuthenticated = !!session && !!user;
-
   return (
-    <AuthContext.Provider value={{ 
-      isAuthenticated, 
-      user, 
-      session,
-      role, 
-      setRole, 
-      logout, 
-      isLoading 
+    <AuthContext.Provider value={{
+      isAuthenticated: !!session && !!user,
+      user, session, role, setRole, logout, isLoading
     }}>
       {children}
     </AuthContext.Provider>
@@ -222,8 +160,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
