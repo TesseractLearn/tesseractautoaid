@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
     })
   } catch (err) {
     console.error('create-payment-order error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: 'Failed to create payment order' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }

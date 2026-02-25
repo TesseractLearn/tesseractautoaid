@@ -93,7 +93,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error sending verification email:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: 'Failed to send verification email' }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },

@@ -151,7 +151,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('dispatch-booking error:', err)
+    return new Response(JSON.stringify({ error: 'Failed to dispatch booking' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
