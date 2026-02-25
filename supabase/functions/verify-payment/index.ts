@@ -33,10 +33,28 @@ Deno.serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, transactionId } = await req.json()
+    const body = await req.json()
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, transactionId } = body
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !transactionId) {
-      return new Response(JSON.stringify({ error: 'Missing payment verification fields' }), {
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!transactionId || typeof transactionId !== 'string' || !uuidRegex.test(transactionId)) {
+      return new Response(JSON.stringify({ error: 'Invalid transaction ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!razorpay_order_id || typeof razorpay_order_id !== 'string' || razorpay_order_id.length > 100) {
+      return new Response(JSON.stringify({ error: 'Invalid order ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!razorpay_payment_id || typeof razorpay_payment_id !== 'string' || razorpay_payment_id.length > 100) {
+      return new Response(JSON.stringify({ error: 'Invalid payment ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!razorpay_signature || typeof razorpay_signature !== 'string' || razorpay_signature.length > 200) {
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }

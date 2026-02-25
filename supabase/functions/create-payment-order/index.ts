@@ -43,10 +43,18 @@ Deno.serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string
-    const { bookingId, mechanicQuote } = await req.json()
+    const body = await req.json()
+    const { bookingId, mechanicQuote } = body
 
-    if (!bookingId || !mechanicQuote || mechanicQuote <= 0) {
-      return new Response(JSON.stringify({ error: 'Invalid booking or quote amount' }), {
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!bookingId || typeof bookingId !== 'string' || !uuidRegex.test(bookingId)) {
+      return new Response(JSON.stringify({ error: 'Invalid booking ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!mechanicQuote || typeof mechanicQuote !== 'number' || mechanicQuote < 50 || mechanicQuote > 500000) {
+      return new Response(JSON.stringify({ error: 'Invalid quote amount (must be ₹50–₹5,00,000)' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }

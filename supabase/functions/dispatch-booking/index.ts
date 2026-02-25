@@ -55,7 +55,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { bookingId, radiusKm, excludeMechanicIds } = await req.json()
+    const body = await req.json()
+    const { bookingId, radiusKm, excludeMechanicIds } = body
+
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!bookingId || typeof bookingId !== 'string' || !uuidRegex.test(bookingId)) {
+      return new Response(JSON.stringify({ error: 'Invalid booking ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (radiusKm !== undefined && (typeof radiusKm !== 'number' || radiusKm < 1 || radiusKm > 500)) {
+      return new Response(JSON.stringify({ error: 'Invalid radius' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (excludeMechanicIds !== undefined && (!Array.isArray(excludeMechanicIds) || excludeMechanicIds.length > 50 || !excludeMechanicIds.every((id: unknown) => typeof id === 'string' && uuidRegex.test(id)))) {
+      return new Response(JSON.stringify({ error: 'Invalid exclude list' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     const radius = radiusKm || INITIAL_RADIUS_KM
     const excludeIds: string[] = excludeMechanicIds || []
 

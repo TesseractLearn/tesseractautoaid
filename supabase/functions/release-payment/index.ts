@@ -33,7 +33,16 @@ Deno.serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string
-    const { transactionId } = await req.json()
+    const body = await req.json()
+    const { transactionId } = body
+
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!transactionId || typeof transactionId !== 'string' || !uuidRegex.test(transactionId)) {
+      return new Response(JSON.stringify({ error: 'Invalid transaction ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,

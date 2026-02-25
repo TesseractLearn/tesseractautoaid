@@ -21,7 +21,26 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, name, verificationUrl }: VerificationEmailRequest = await req.json();
+    const body = await req.json();
+    const { email, name, verificationUrl } = body as VerificationEmailRequest;
+
+    // Input validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== 'string' || !emailRegex.test(email) || email.length > 255) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid email address' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+    if (name !== undefined && name !== null && (typeof name !== 'string' || name.length > 100)) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid name' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+    if (!verificationUrl || typeof verificationUrl !== 'string' || verificationUrl.length > 2000) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid verification URL' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
 
     console.log(`Sending verification email to: ${email}`);
 
