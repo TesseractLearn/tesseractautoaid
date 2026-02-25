@@ -162,7 +162,9 @@ const Auth: React.FC = () => {
       if (error) {
         const msg = error.message.toLowerCase();
         
-        if (msg.includes('invalid login credentials')) {
+        if (msg.includes('failed to fetch') || msg.includes('network') || (error as any).__isAuthError && (error as any).status === 0) {
+          setError('Network error. Please check your internet connection and try again.');
+        } else if (msg.includes('invalid login credentials')) {
           setIsExistingUser(true);
           setStep('login-password');
         } else if (msg.includes('email not confirmed')) {
@@ -217,8 +219,10 @@ const Auth: React.FC = () => {
       if (error) {
         const msg = error.message.toLowerCase();
         setPassword('');
-        
-        if (msg.includes('invalid login credentials')) {
+
+        if (msg.includes('failed to fetch') || msg.includes('network') || (error as any).__isAuthError && (error as any).status === 0) {
+          setError('Network error. Please check your internet connection and try again.');
+        } else if (msg.includes('invalid login credentials')) {
           if (isExistingUser) {
             setError('Incorrect password. Please try again.');
           } else {
@@ -289,9 +293,13 @@ const Auth: React.FC = () => {
 
       setIsCheckingRole(false);
       toast.success('Welcome back!');
-    } catch (err) {
+    } catch (err: any) {
       setPassword('');
-      setError('Something went wrong. Please try again.');
+      if (err?.message?.includes('fetch') || err?.name === 'AuthRetryableFetchError') {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
     } finally {
       setIsLoading(false);
       setIsCheckingRole(false);
