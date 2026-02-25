@@ -56,8 +56,42 @@ const Auth: React.FC = () => {
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isResetMode, setIsResetMode] = useState(false);
   const [isCheckingRole, setIsCheckingRole] = useState(false);
+  const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
 
-  // Handle password reset link detection and auth events
+  // Health check: verify backend is reachable on mount & clear stale tokens
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        // Clear any stale Supabase tokens that might poison requests
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          // Verify the session is actually valid by calling getUser
+          const { error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            console.warn('Stale session detected on auth page, clearing:', userError.message);
+            await supabase.auth.signOut().catch(() => {});
+            for (const key of Object.keys(localStorage)) {
+              if (key.startsWith('sb-')) localStorage.removeItem(key);
+            }
+          }
+        }
+
+        // Simple health ping to the Supabase REST endpoint
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/`, {
+          method: 'HEAD',
+          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        });
+        setBackendReachable(res.ok);
+        if (!res.ok) {
+          console.error('Backend health check failed:', res.status);
+        }
+      } catch (err) {
+        console.error('Backend unreachable:', err);
+        setBackendReachable(false);
+      }
+    };
+    checkBackend();
+  }, []);
   useEffect(() => {
     const mode = searchParams.get('mode');
     const type = searchParams.get('type');
@@ -161,9 +195,15 @@ const Auth: React.FC = () => {
 
       if (error) {
         const msg = error.message.toLowerCase();
-        
-        if (msg.includes('failed to fetch') || msg.includes('network') || (error as any).__isAuthError && (error as any).status === 0) {
-          setError('Network error. Please check your internet connection and try again.');
+        const isNetworkError = msg.includes('failed to fetch') || msg.includes('networkerror') || ((error as any).__isAuthError && (error as any).status === 0);
+
+        if (isNetworkError) {
+          // Clear stale tokens and retry once
+          console.error('Email check network error, clearing stale tokens:', error.message);
+          for (const key of Object.keys(localStorage)) {
+            if (key.startsWith('sb-')) localStorage.removeItem(key);
+          }
+          setError('Connection issue. Stale session cleared — please try again.');
         } else if (msg.includes('invalid login credentials')) {
           setIsExistingUser(true);
           setStep('login-password');
@@ -184,9 +224,13 @@ const Auth: React.FC = () => {
       } else {
         toast.success('Welcome back!');
       }
-    } catch (err) {
-      setIsExistingUser(false);
-      setStep('signup-details');
+    } catch (err: any) {
+      console.error('Email check exception:', err);
+      // Clear stale tokens on network failure
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      }
+      setError('Connection issue. Stale session cleared — please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -211,6 +255,15 @@ const Auth: React.FC = () => {
     try {
       const normalizedEmail = email.trim().toLowerCase();
       
+      // Pre-clear any stale sb- tokens before attempting sign-in
+      // This prevents the autoRefreshToken mechanism from poisoning the request
+      const existingKeys = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
+      if (existingKeys.length > 0) {
+        console.log('Clearing stale auth tokens before sign-in attempt');
+        await supabase.auth.signOut().catch(() => {});
+        existingKeys.forEach(k => localStorage.removeItem(k));
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
@@ -218,10 +271,17 @@ const Auth: React.FC = () => {
 
       if (error) {
         const msg = error.message.toLowerCase();
+        const isNetworkError = msg.includes('failed to fetch') || msg.includes('networkerror') || ((error as any).__isAuthError && (error as any).status === 0);
+
+        console.error('Login auth error:', { message: error.message, status: (error as any).status, name: error.name });
         setPassword('');
 
-        if (msg.includes('failed to fetch') || msg.includes('network') || (error as any).__isAuthError && (error as any).status === 0) {
-          setError('Network error. Please check your internet connection and try again.');
+        if (isNetworkError) {
+          // Clear tokens again and show actionable message
+          for (const key of Object.keys(localStorage)) {
+            if (key.startsWith('sb-')) localStorage.removeItem(key);
+          }
+          setError('Server connection failed. Stale session cleared — please try signing in again.');
         } else if (msg.includes('invalid login credentials')) {
           if (isExistingUser) {
             setError('Incorrect password. Please try again.');
@@ -239,7 +299,7 @@ const Auth: React.FC = () => {
           setError('No account found with this email.');
           setTimeout(() => setStep('signup-details'), 1500);
         } else {
-          setError('Unable to sign in. Please check your credentials.');
+          setError(`Login failed: ${error.message}`);
         }
         return;
       }
@@ -294,12 +354,13 @@ const Auth: React.FC = () => {
       setIsCheckingRole(false);
       toast.success('Welcome back!');
     } catch (err: any) {
+      console.error('Login exception:', err);
       setPassword('');
-      if (err?.message?.includes('fetch') || err?.name === 'AuthRetryableFetchError') {
-        setError('Network error. Please check your internet connection and try again.');
-      } else {
-        setError('Something went wrong. Please try again.');
+      // Clear stale tokens on any error
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
       }
+      setError(`Login failed: ${err?.message || 'Unknown error. Please try again.'}`);
     } finally {
       setIsLoading(false);
       setIsCheckingRole(false);
