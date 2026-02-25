@@ -96,14 +96,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (sessionError || !session) {
-          // If getSession itself fails (e.g. stale refresh token), clear everything
+        if (!session) {
+          // No session at all — user isn't logged in, that's fine
           if (sessionError) {
-            console.warn('Session recovery failed, clearing stale auth:', sessionError.message);
-            await supabase.auth.signOut().catch(() => {});
-            // Also clear Supabase storage keys manually in case signOut fails
-            for (const key of Object.keys(localStorage)) {
-              if (key.startsWith('sb-')) localStorage.removeItem(key);
+            // Only clear tokens if it's a definitive auth error (not network)
+            const msg = sessionError.message?.toLowerCase() || '';
+            const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') || msg.includes('abort');
+            if (!isNetworkError) {
+              console.warn('Session invalid, clearing auth:', sessionError.message);
+              await supabase.auth.signOut().catch(() => {});
+            } else {
+              console.warn('Network issue during getSession, not clearing tokens:', sessionError.message);
             }
           }
           setSession(null);
@@ -114,7 +117,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const { data: { user }, error } = await supabase.auth.getUser();
 
-        // If the account was deleted, token invalid, or EMAIL NOT VERIFIED - clear auth
+        // Only clear auth for definitive errors (invalid token, deleted account, unverified)
+        // NOT for network timeouts
+        if (error) {
+          const msg = error.message?.toLowerCase() || '';
+          const isNetworkError = msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') || msg.includes('abort');
+          if (isNetworkError) {
+            // Network issue — keep session, don't destroy tokens
+            console.warn('Network issue during getUser, keeping session');
+            setSession(session);
+            setUser(session.user);
+            await syncRoleFromDB(session.user.id).catch(() => {});
+            setIsLoading(false);
+            return;
+          }
+        }
+
         if (error || !user || !user.email_confirmed_at) {
           await supabase.auth.signOut().catch(() => {});
           setSession(null);
@@ -131,16 +149,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await syncRoleFromDB(user.id);
         setIsLoading(false);
       } catch (err) {
-        // Network failure during session check — clear stale tokens so user can sign in fresh
-        console.warn('Auth initialization failed, clearing stale session:', err);
-        await supabase.auth.signOut().catch(() => {});
-        for (const key of Object.keys(localStorage)) {
-          if (key.startsWith('sb-')) localStorage.removeItem(key);
-        }
-        setSession(null);
-        setUser(null);
-        setRoleState(null);
-        localStorage.removeItem('autoaid_role');
+        // Network failure during session check — do NOT clear tokens.
+        // The session may still be valid; the network might recover.
+        // The onAuthStateChange listener will handle future state changes.
+        console.warn('Auth initialization: network issue, keeping existing session:', err);
+        // Still mark loading as done so the UI isn't stuck on a spinner
         setIsLoading(false);
       }
     })();
