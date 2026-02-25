@@ -40,10 +40,18 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { bookingId, mechanicId } = await req.json()
+    const body = await req.json()
+    const { bookingId, mechanicId } = body
 
-    if (!bookingId || !mechanicId) {
-      return new Response(JSON.stringify({ error: 'bookingId and mechanicId are required' }), {
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!bookingId || typeof bookingId !== 'string' || !uuidRegex.test(bookingId)) {
+      return new Response(JSON.stringify({ error: 'Invalid booking ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!mechanicId || typeof mechanicId !== 'string' || !uuidRegex.test(mechanicId)) {
+      return new Response(JSON.stringify({ error: 'Invalid mechanic ID' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }

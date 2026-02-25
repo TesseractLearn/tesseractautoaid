@@ -33,10 +33,23 @@ Deno.serve(async (req) => {
     }
 
     const userId = claimsData.claims.sub as string
-    const { transactionId, reason, photos } = await req.json()
+    const body = await req.json()
+    const { transactionId, reason, photos } = body
 
-    if (!transactionId || !reason) {
-      return new Response(JSON.stringify({ error: 'Transaction ID and reason are required' }), {
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!transactionId || typeof transactionId !== 'string' || !uuidRegex.test(transactionId)) {
+      return new Response(JSON.stringify({ error: 'Invalid transaction ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (!reason || typeof reason !== 'string' || reason.length < 10 || reason.length > 2000) {
+      return new Response(JSON.stringify({ error: 'Reason must be 10–2000 characters' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    if (photos !== undefined && photos !== null && (!Array.isArray(photos) || photos.length > 10 || !photos.every((p: unknown) => typeof p === 'string' && p.length <= 500))) {
+      return new Response(JSON.stringify({ error: 'Invalid photos (max 10 URLs)' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }

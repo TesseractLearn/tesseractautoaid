@@ -18,7 +18,16 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { bookingId } = await req.json()
+    const body = await req.json()
+    const { bookingId } = body
+
+    // Input validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!bookingId || typeof bookingId !== 'string' || !uuidRegex.test(bookingId)) {
+      return new Response(JSON.stringify({ error: 'Invalid booking ID' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     // Check booking status
     const { data: booking } = await supabase
