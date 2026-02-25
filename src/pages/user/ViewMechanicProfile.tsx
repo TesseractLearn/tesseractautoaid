@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface MechanicProfile {
   id: string;
   full_name: string;
-  phone: string | null;
+  phone?: string | null;
   specialization: string | null;
   rating: number | null;
   total_rating_count: number | null;
@@ -57,7 +57,7 @@ const ViewMechanicProfile: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       const [mechRes, revRes] = await Promise.all([
-        supabase.from('mechanics').select('*').eq('id', mechanicId).maybeSingle(),
+        supabase.from('mechanics_public').select('*').eq('id', mechanicId).maybeSingle(),
         supabase
           .from('mechanic_reviews')
           .select('id, rating, comment, created_at, user_id')

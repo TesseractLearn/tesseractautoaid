@@ -84,7 +84,7 @@ const NearbyMechanicsMap: React.FC<NearbyMechanicsMapProps> = ({ mechanics: prop
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('mechanics')
+          .from('mechanics_public')
           .select('id, user_id, full_name, specialization, latitude, longitude, rating, is_available, address, services_offered, profile_photo_url');
 
         if (error) throw error;
