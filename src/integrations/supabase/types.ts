@@ -776,6 +776,15 @@ export type Database = {
       }
     }
     Functions: {
+      get_booking_ids_for_mechanic: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
+      get_mechanic_ids_for_user: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
+      get_user_booking_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_role: { Args: { _user_id: string }; Returns: string }
       has_active_booking_with_mechanic: {
         Args: { _mechanic_id: string; _user_id: string }
