@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
@@ -21,6 +22,27 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // ── Auth check ──
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
+        status: 401, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+    if (claimsErr || !claims?.claims?.sub) {
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
+        status: 401, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const callerEmail = (claims.claims as any).email as string | undefined;
+
     const body = await req.json();
     const { email, name, verificationUrl } = body as VerificationEmailRequest;
 
@@ -29,6 +51,12 @@ const handler = async (req: Request): Promise<Response> => {
     if (!email || typeof email !== 'string' || !emailRegex.test(email) || email.length > 255) {
       return new Response(JSON.stringify({ success: false, error: 'Invalid email address' }), {
         status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+    // Only allow sending to caller's own email
+    if (callerEmail && email.toLowerCase() !== callerEmail.toLowerCase()) {
+      return new Response(JSON.stringify({ success: false, error: 'Can only send to your own email' }), {
+        status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
     if (name !== undefined && name !== null && (typeof name !== 'string' || name.length > 100)) {

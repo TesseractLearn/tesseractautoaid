@@ -18,6 +18,34 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // ── Auth: allow user (JWT) OR internal service-role calls ──
+    const authHeader = req.headers.get('Authorization') || ''
+    const token = authHeader.replace('Bearer ', '')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    let callerId: string | null = null
+    const isServiceCall = token === serviceRoleKey
+
+    if (!isServiceCall) {
+      if (!authHeader.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      )
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token)
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      callerId = claims.claims.sub as string
+    }
+
     const body = await req.json()
     const { bookingId } = body
 
@@ -39,6 +67,13 @@ Deno.serve(async (req) => {
     if (!booking || booking.status === 'accepted' || booking.status === 'completed') {
       return new Response(JSON.stringify({ success: true, message: 'Booking already handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // ── Ownership check: user calls must own the booking ──
+    if (callerId && booking.user_id !== callerId) {
+      return new Response(JSON.stringify({ error: 'Booking not found or access denied' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
