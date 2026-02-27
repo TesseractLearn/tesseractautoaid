@@ -42,8 +42,9 @@ const MechanicCard: React.FC<{
   mechanic: NearbyMechanic;
   onSelect: () => void;
   selecting: boolean;
+  disabled?: boolean;
   onViewProfile?: () => void;
-}> = ({ mechanic, onSelect, selecting, onViewProfile }) => (
+}> = ({ mechanic, onSelect, selecting, disabled, onViewProfile }) => (
   <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
     <div
       className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all"
@@ -78,7 +79,7 @@ const MechanicCard: React.FC<{
           Online
         </span>
       )}
-      <Button size="sm" onClick={onSelect} disabled={selecting} className="text-xs h-8">
+      <Button size="sm" onClick={onSelect} disabled={selecting || disabled} className="text-xs h-8">
         {selecting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Select'}
       </Button>
     </div>
@@ -377,7 +378,8 @@ const FindMechanics: React.FC = () => {
                       key={m.id}
                       mechanic={m}
                       onSelect={() => handleDirectSelect(m.id)}
-                      selecting={selecting || !selectedService}
+                      selecting={selecting}
+                      disabled={!selectedService}
                       onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                     />
                   ))}
