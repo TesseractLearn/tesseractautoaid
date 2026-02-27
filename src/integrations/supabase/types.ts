@@ -161,7 +161,7 @@ export type Database = {
       }
       mechanic_reviews: {
         Row: {
-          booking_id: string | null
+          booking_id: string
           comment: string | null
           created_at: string
           id: string
@@ -170,7 +170,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          booking_id?: string | null
+          booking_id: string
           comment?: string | null
           created_at?: string
           id?: string
@@ -179,7 +179,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          booking_id?: string | null
+          booking_id?: string
           comment?: string | null
           created_at?: string
           id?: string
@@ -721,7 +721,6 @@ export type Database = {
           recent_jobs_count: number | null
           services_offered: string[] | null
           specialization: string | null
-          total_earnings: number | null
           total_jobs_count: number | null
           total_rating_count: number | null
           updated_at: string | null
@@ -745,7 +744,6 @@ export type Database = {
           recent_jobs_count?: number | null
           services_offered?: string[] | null
           specialization?: string | null
-          total_earnings?: number | null
           total_jobs_count?: number | null
           total_rating_count?: number | null
           updated_at?: string | null
@@ -769,7 +767,6 @@ export type Database = {
           recent_jobs_count?: number | null
           services_offered?: string[] | null
           specialization?: string | null
-          total_earnings?: number | null
           total_jobs_count?: number | null
           total_rating_count?: number | null
           updated_at?: string | null
