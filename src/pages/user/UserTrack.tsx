@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Button } from '@/components/ui/button';
-import { MapPin, Phone, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2, Shield } from 'lucide-react';
+import { MapPin, Phone, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2, Shield, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import PaymentCheckout from '@/components/payment/PaymentCheckout';
+import CancelJobDialog from '@/components/CancelJobDialog';
 import JobCompletion from '@/components/payment/JobCompletion';
 import PaymentBreakdownCard from '@/components/payment/PaymentBreakdownCard';
 
@@ -45,7 +47,25 @@ const UserTrack: React.FC = () => {
   const [mapboxToken, setMapboxToken] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const navigate = useNavigate();
+
+  const handleUserCancel = async (reason: string) => {
+    if (!activeBooking) return;
+    try {
+      const { error } = await supabase.from('bookings').update({
+        status: 'user_cancelled',
+        issue_description: `[CANCELLED] ${reason}`,
+      }).eq('id', activeBooking.id);
+      if (error) throw error;
+      toast.success('Job cancelled successfully');
+      setShowCancelDialog(false);
+      setActiveBooking(null);
+    } catch (err: any) {
+      toast.error('Failed to cancel: ' + err.message);
+      throw err;
+    }
+  };
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -493,6 +513,26 @@ const UserTrack: React.FC = () => {
                   Review & Release Payment
                 </Button>
               )}
+
+              {/* Cancel Job button - visible before completion */}
+              {activeBooking.status !== 'completed' && (
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => setShowCancelDialog(true)}
+                >
+                  <XCircle className="w-5 h-5 mr-2" />
+                  Cancel Job
+                </Button>
+              )}
+
+              <CancelJobDialog
+                open={showCancelDialog}
+                onOpenChange={setShowCancelDialog}
+                onConfirm={handleUserCancel}
+                role="user"
+              />
             </>
           )}
         </div>

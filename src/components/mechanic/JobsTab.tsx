@@ -3,9 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useMechanicProfile } from '@/hooks/useMechanicProfile';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MapPin, Clock, CheckCircle2, Navigation, Star, Briefcase } from 'lucide-react';
+import { Loader2, MapPin, Clock, CheckCircle2, Navigation, Star, Briefcase, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import CancelJobDialog from '@/components/CancelJobDialog';
 
 interface Job {
   id: string;
@@ -45,6 +46,23 @@ const JobsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('active');
   const [completing, setCompleting] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+
+  const handleCancel = async (jobId: string, reason: string) => {
+    try {
+      const { error } = await supabase.from('bookings').update({
+        status: 'mechanic_cancelled',
+        issue_description: `[MECHANIC_CANCELLED] ${reason}`,
+      }).eq('id', jobId);
+      if (error) throw error;
+      toast.success('Job cancelled');
+      setCancellingJobId(null);
+      fetchJobs();
+    } catch {
+      toast.error('Failed to cancel job');
+      throw new Error('cancel failed');
+    }
+  };
 
   useEffect(() => {
     if (!mechanic) return;
@@ -142,14 +160,21 @@ const JobsTab: React.FC = () => {
       ) : (
         <>
           {/* Active Jobs */}
-          {filter === 'active' && activeJobs.length > 0 && (
+           {filter === 'active' && activeJobs.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">Active Jobs ({activeJobs.length})</h3>
               {activeJobs.map(job => (
-                <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} />
+                <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} onCancelClick={() => setCancellingJobId(job.id)} />
               ))}
             </div>
           )}
+
+          <CancelJobDialog
+            open={!!cancellingJobId}
+            onOpenChange={(open) => { if (!open) setCancellingJobId(null); }}
+            onConfirm={(reason) => handleCancel(cancellingJobId!, reason)}
+            role="mechanic"
+          />
 
           {/* History */}
           {(filter !== 'active' || (filter === 'active' && historyJobs.length > 0)) && (
@@ -172,7 +197,8 @@ const JobCard: React.FC<{
   job: Job;
   onComplete: (id: string) => void;
   completing: string | null;
-}> = ({ job, onComplete, completing }) => {
+  onCancelClick?: () => void;
+}> = ({ job, onComplete, completing, onCancelClick }) => {
   const isActive = ['accepted', 'mechanic_arriving', 'in_progress'].includes(job.status);
   const price = job.final_price || job.estimated_price;
 
@@ -210,20 +236,33 @@ const JobCard: React.FC<{
           )}
         </div>
 
-        {isActive && job.status === 'in_progress' && (
-          <Button
-            size="sm"
-            className="text-xs h-8"
-            onClick={() => onComplete(job.id)}
-            disabled={completing === job.id}
-          >
-            {completing === job.id ? (
-              <Loader2 className="w-3 h-3 animate-spin mr-1" />
-            ) : (
-              <CheckCircle2 className="w-3 h-3 mr-1" />
+        {isActive && (
+          <div className="flex gap-2">
+            {job.status === 'in_progress' && (
+              <Button
+                size="sm"
+                className="text-xs h-8"
+                onClick={() => onComplete(job.id)}
+                disabled={completing === job.id}
+              >
+                {completing === job.id ? (
+                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                ) : (
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                )}
+                Complete
+              </Button>
             )}
-            Complete
-          </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="text-xs h-8"
+              onClick={onCancelClick}
+            >
+              <XCircle className="w-3 h-3 mr-1" />
+              Cancel
+            </Button>
+          </div>
         )}
       </div>
     </div>
