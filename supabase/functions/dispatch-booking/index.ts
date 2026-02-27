@@ -55,6 +55,35 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // ── Auth: allow user (JWT) OR internal service-role calls ──
+    const authHeader = req.headers.get('Authorization') || ''
+    const token = authHeader.replace('Bearer ', '')
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    let callerId: string | null = null
+    const isServiceCall = token === serviceRoleKey
+
+    if (!isServiceCall) {
+      // Validate JWT for normal user calls
+      if (!authHeader.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: authHeader } } }
+      )
+      const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token)
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      callerId = claims.claims.sub as string
+    }
+
     const body = await req.json()
     const { bookingId, radiusKm, excludeMechanicIds } = body
 
@@ -92,7 +121,14 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Query available, verified mechanics
+    // ── Ownership check: user calls must own the booking ──
+    if (callerId && booking.user_id !== callerId) {
+      return new Response(JSON.stringify({ error: 'Booking not found or access denied' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Query available mechanics
     let query = supabase
       .from('mechanics')
       .select('*')
@@ -112,7 +148,6 @@ Deno.serve(async (req) => {
       .filter(m => m.distKm <= radius)
 
     if (candidates.length === 0) {
-      // No mechanics found
       await supabase
         .from('bookings')
         .update({ status: 'no_mechanic_found' })
