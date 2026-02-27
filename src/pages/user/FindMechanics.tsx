@@ -108,6 +108,7 @@ const FindMechanics: React.FC = () => {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [step, setStep] = useState<'gps' | 'service' | 'waiting' | 'responses'>('gps');
   const [showBroadcastConfirm, setShowBroadcastConfirm] = useState(false);
+  const [directSelecting, setDirectSelecting] = useState(false);
 
   // Fetch nearby mechanics as soon as we have GPS
   React.useEffect(() => {
@@ -173,29 +174,33 @@ const FindMechanics: React.FC = () => {
       toast.error('Please select a service type first');
       return;
     }
-    const price = computePriceEstimate(selectedSymptoms);
-    const severity = computeSeverity(selectedSymptoms);
-    const booking = await createRequest({
-      serviceType: selectedService,
-      issueDescription: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : undefined,
-      latitude,
-      longitude,
-      selectedProblems: selectedSymptoms,
-      severity,
-      estimatedPriceMin: price.min || undefined,
-      estimatedPriceMax: price.max || undefined,
-    });
-    if (booking) {
-      // Now select the mechanic for this booking
-      const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
-        body: { bookingId: booking.id, mechanicId },
+    setDirectSelecting(true);
+    try {
+      const price = computePriceEstimate(selectedSymptoms);
+      const severity = computeSeverity(selectedSymptoms);
+      const booking = await createRequest({
+        serviceType: selectedService,
+        issueDescription: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : undefined,
+        latitude,
+        longitude,
+        selectedProblems: selectedSymptoms,
+        severity,
+        estimatedPriceMin: price.min || undefined,
+        estimatedPriceMax: price.max || undefined,
       });
-      if (error || data?.error) {
-        toast.error('Failed to assign mechanic: ' + (data?.error || error?.message));
-      } else {
-        toast.success('Mechanic selected! They are on their way.');
-        navigate('/user/track');
+      if (booking) {
+        const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
+          body: { bookingId: booking.id, mechanicId },
+        });
+        if (error || data?.error) {
+          toast.error('Failed to assign mechanic: ' + (data?.error || error?.message));
+        } else {
+          toast.success('Mechanic selected! They are on their way.');
+          navigate('/user/track');
+        }
       }
+    } finally {
+      setDirectSelecting(false);
     }
   };
 
@@ -378,7 +383,7 @@ const FindMechanics: React.FC = () => {
                       key={m.id}
                       mechanic={m}
                       onSelect={() => handleDirectSelect(m.id)}
-                      selecting={selecting}
+                      selecting={directSelecting}
                       disabled={!selectedService}
                       onViewProfile={() => navigate(`/user/mechanic/${m.id}`)}
                     />
