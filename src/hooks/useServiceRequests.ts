@@ -82,6 +82,11 @@ export const useServiceRequests = () => {
         .filter(m => {
           const isSelf = m.user_id === user?.id;
           if (isSelf) console.log('[FindMechanics] Filtering out self:', m.full_name);
+          // Only show verified + online mechanics to users
+          if (!m.is_verified) {
+            console.log('[FindMechanics] Filtering unverified:', m.full_name);
+            return false;
+          }
           return !isSelf;
         })
         .map(m => {
@@ -130,6 +135,18 @@ export const useServiceRequests = () => {
     setLoading(true);
 
     try {
+      // Enforce max 3 active bookings per user
+      const { count, error: countErr } = await supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'offer_sent', 'accepted', 'mechanic_arriving', 'in_progress']);
+      
+      if (!countErr && (count || 0) >= 3) {
+        toast.error('Max 3 active bookings allowed. Complete or cancel an existing booking first.');
+        setLoading(false);
+        return null;
+      }
       const { data: booking, error } = await supabase
         .from('bookings')
         .insert({

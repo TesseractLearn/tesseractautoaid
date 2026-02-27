@@ -253,15 +253,17 @@ const JobCard: React.FC<{
                 Complete
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="destructive"
-              className="text-xs h-8"
-              onClick={onCancelClick}
-            >
-              <XCircle className="w-3 h-3 mr-1" />
-              Cancel
-            </Button>
+            {job.status !== 'in_progress' && (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="text-xs h-8"
+                onClick={onCancelClick}
+              >
+                <XCircle className="w-3 h-3 mr-1" />
+                Cancel
+              </Button>
+            )}
           </div>
         )}
       </div>

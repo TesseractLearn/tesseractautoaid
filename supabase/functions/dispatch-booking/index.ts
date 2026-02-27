@@ -128,13 +128,12 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Query available mechanics
-    let query = supabase
+    // Query available AND verified mechanics only
+    const { data: mechanics, error: mechErr } = await supabase
       .from('mechanics')
       .select('*')
       .eq('is_available', true)
-
-    const { data: mechanics, error: mechErr } = await query
+      .eq('is_verified', true)
     if (mechErr) throw mechErr
 
     // Filter by radius and exclude already-offered mechanics

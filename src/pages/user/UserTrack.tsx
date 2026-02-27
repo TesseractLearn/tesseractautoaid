@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Button } from '@/components/ui/button';
-import { MapPin, Phone, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2, Shield, XCircle } from 'lucide-react';
+import { MapPin, MessageCircle, Clock, CheckCircle2, Search, Wrench, Navigation, Star, Loader2, Shield, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -121,7 +121,7 @@ const UserTrack: React.FC = () => {
           transaction: tx,
         });
 
-        // Auto-show completion screen
+        // Auto-show completion screen only after payment is done
         if (data.status === 'completed' && tx?.status === 'paid') {
           setShowCompletion(true);
         }
@@ -459,13 +459,7 @@ const UserTrack: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {activeBooking.mechanic.phone && (
-                      <Button variant="outline" size="icon" asChild>
-                        <a href={`tel:${activeBooking.mechanic.phone}`}>
-                          <Phone className="w-4 h-4" />
-                        </a>
-                      </Button>
-                    )}
+                    {/* No phone exposure — contact via in-app chat only */}
                     <Button variant="outline" size="icon">
                       <MessageCircle className="w-4 h-4" />
                     </Button>
@@ -473,14 +467,9 @@ const UserTrack: React.FC = () => {
                 </div>
               )}
 
-              {/* Progress Steps */}
+              {/* Progress Steps — Payment after job completion */}
               <div className="space-y-3">
                 <ProgressStep label="Booking confirmed" done={true} active={false} />
-                <ProgressStep
-                  label="Payment received"
-                  done={!!activeBooking.transaction && activeBooking.transaction.status !== 'pending'}
-                  active={activeBooking.payment_status === 'awaiting_payment'}
-                />
                 <ProgressStep
                   label="Mechanic on the way"
                   done={activeBooking.status === 'in_progress' || activeBooking.status === 'completed'}
@@ -493,20 +482,25 @@ const UserTrack: React.FC = () => {
                 />
                 <ProgressStep
                   label="Job completed"
-                  done={activeBooking.transaction?.status === 'released_to_mechanic'}
-                  active={activeBooking.status === 'completed'}
+                  done={activeBooking.status === 'completed'}
+                  active={false}
+                />
+                <ProgressStep
+                  label="Payment"
+                  done={activeBooking.transaction?.status === 'paid' || activeBooking.transaction?.status === 'released_to_mechanic'}
+                  active={activeBooking.status === 'completed' && !activeBooking.transaction}
                 />
               </div>
 
-              {/* Pay Now button */}
-              {activeBooking.payment_status === 'awaiting_payment' && activeBooking.mechanic_quote && (
+              {/* Pay Now button — ONLY after job completion */}
+              {activeBooking.status === 'completed' && (!activeBooking.transaction || activeBooking.payment_status === 'unpaid') && activeBooking.mechanic_quote && (
                 <Button size="lg" className="w-full" onClick={() => setShowPayment(true)}>
                   <Shield className="w-5 h-5 mr-2" />
-                  Pay ₹{Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0)} Securely
+                  Pay ₹{Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0)} Now
                 </Button>
               )}
 
-              {/* Release payment button */}
+              {/* Release payment button — after payment confirmed */}
               {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
                 <Button size="lg" className="w-full" onClick={() => setShowCompletion(true)}>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
@@ -514,8 +508,8 @@ const UserTrack: React.FC = () => {
                 </Button>
               )}
 
-              {/* Cancel Job button - visible before completion */}
-              {activeBooking.status !== 'completed' && (
+              {/* Cancel Job button - only before repair_in_progress */}
+              {!['in_progress', 'completed'].includes(activeBooking.status) && (
                 <Button
                   variant="destructive"
                   size="lg"
@@ -525,6 +519,12 @@ const UserTrack: React.FC = () => {
                   <XCircle className="w-5 h-5 mr-2" />
                   Cancel Job
                 </Button>
+              )}
+
+              {activeBooking.status === 'in_progress' && (
+                <p className="text-xs text-center text-muted-foreground">
+                  Cannot cancel — work in progress
+                </p>
               )}
 
               <CancelJobDialog
