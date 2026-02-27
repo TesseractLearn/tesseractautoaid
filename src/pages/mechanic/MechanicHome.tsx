@@ -459,7 +459,7 @@ const MechanicHome: React.FC = () => {
                             {job.status.replace('_', ' ')}
                           </p>
                         </div>
-                        {isActive && (
+                        {isActive && job.status !== 'in_progress' && (
                           <Button
                             size="sm"
                             variant="destructive"

@@ -76,6 +76,13 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Enforce max 3 active jobs per mechanic
+    if ((mechanic.active_jobs_count || 0) >= 3) {
+      return new Response(JSON.stringify({ error: 'Max 3 active jobs allowed. Complete or cancel an existing job first.' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     // Check booking is still available
     const { data: booking } = await supabase
       .from('bookings')
@@ -114,7 +121,7 @@ Deno.serve(async (req) => {
         mechanic_id: mechanicId,
         mechanic_quote: quotedPrice || null,
         platform_fee: platformFee,
-        payment_status: quotedPrice ? 'awaiting_payment' : 'unpaid',
+        payment_status: 'unpaid',
       })
       .eq('id', bookingId)
 
