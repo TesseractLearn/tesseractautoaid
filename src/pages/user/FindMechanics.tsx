@@ -79,7 +79,7 @@ const MechanicCard: React.FC<{
           Online
         </span>
       )}
-      <Button size="sm" onClick={onSelect} disabled={selecting || disabled} className="text-xs h-8">
+      <Button size="sm" onClick={onSelect} disabled={selecting} className="text-xs h-8">
         {selecting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Select'}
       </Button>
     </div>
@@ -172,6 +172,7 @@ const FindMechanics: React.FC = () => {
     console.log('[FindMechanics] User selected mechanic:', mechanicId, 'service:', selectedService);
     if (!latitude || !longitude || !selectedService) {
       toast.error('Please select a service type first');
+      document.getElementById('service-picker')?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
     setDirectSelecting(true);
@@ -260,7 +261,7 @@ const FindMechanics: React.FC = () => {
               onManualLocation={setManualLocation}
             />
 
-            <div>
+            <div id="service-picker">
               <h2 className="text-base font-semibold text-foreground mb-3">What do you need?</h2>
               <div className="grid grid-cols-3 gap-3">
                 {serviceOptions.map((s) => (
@@ -318,8 +319,15 @@ const FindMechanics: React.FC = () => {
               <Button
                 size="lg"
                 className="w-full"
-                disabled={!selectedService || requestLoading || dispatching}
-                onClick={() => setShowBroadcastConfirm(true)}
+                disabled={requestLoading || dispatching}
+                onClick={() => {
+                  if (!selectedService) {
+                    toast.error('Please select a service type first');
+                    document.getElementById('service-picker')?.scrollIntoView({ behavior: 'smooth' });
+                    return;
+                  }
+                  setShowBroadcastConfirm(true);
+                }}
               >
                 {(requestLoading || dispatching) ? (
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -332,8 +340,13 @@ const FindMechanics: React.FC = () => {
                 size="lg"
                 variant="outline"
                 className="w-full"
-                disabled={!selectedService || !hasMechanics}
+                disabled={!hasMechanics}
                 onClick={() => {
+                  if (!selectedService) {
+                    toast.error('Please select a service type first');
+                    document.getElementById('service-picker')?.scrollIntoView({ behavior: 'smooth' });
+                    return;
+                  }
                   const el = document.getElementById('mechanic-list');
                   el?.scrollIntoView({ behavior: 'smooth' });
                 }}
