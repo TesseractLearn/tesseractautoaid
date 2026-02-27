@@ -5,14 +5,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const PLATFORM_FEE_PERCENT = 0.15
-const PLATFORM_FEE_CAP = 50 // min ₹50 flat
+const GST_RATE = 0.18
+const PLATFORM_FEE_RATE = 0.15
+const MINIMUM_CHARGE = 200
 
-function calculateFees(mechanicQuote: number) {
-  const platformFee = Math.max(Math.round(mechanicQuote * PLATFORM_FEE_PERCENT), PLATFORM_FEE_CAP)
-  const userPaysTotal = mechanicQuote + platformFee
-  const mechanicShare = mechanicQuote - platformFee
-  return { platformFee, userPaysTotal, mechanicShare }
+function calculateFees(laborCost: number, partsCost: number) {
+  const subtotal = Math.max(laborCost + partsCost, MINIMUM_CHARGE)
+  const tax = Math.round(subtotal * GST_RATE)
+  const platformFee = Math.round(subtotal * PLATFORM_FEE_RATE)
+  const total = subtotal + tax + platformFee
+  const mechanicShare = subtotal - platformFee
+  return { laborCost, partsCost, subtotal, tax, platformFee, total, mechanicShare }
 }
 
 Deno.serve(async (req) => {
@@ -44,7 +47,7 @@ Deno.serve(async (req) => {
 
     const userId = claimsData.claims.sub as string
     const body = await req.json()
-    const { bookingId, mechanicQuote } = body
+    const { bookingId, laborCost, partsCost = 0, mechanicQuote } = body
 
     // Input validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -53,8 +56,13 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
-    if (!mechanicQuote || typeof mechanicQuote !== 'number' || mechanicQuote < 50 || mechanicQuote > 500000) {
-      return new Response(JSON.stringify({ error: 'Invalid quote amount (must be ₹50–₹5,00,000)' }), {
+
+    // Support both new (laborCost+partsCost) and legacy (mechanicQuote) params
+    const effectiveLaborCost = laborCost ?? mechanicQuote ?? 0
+    const effectivePartsCost = partsCost ?? 0
+
+    if (typeof effectiveLaborCost !== 'number' || effectiveLaborCost < 0 || effectiveLaborCost > 500000) {
+      return new Response(JSON.stringify({ error: 'Invalid labor cost' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -64,7 +72,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Verify booking belongs to this user and is accepted
+    // Verify booking belongs to this user
     const { data: booking } = await supabase
       .from('bookings')
       .select('*')
@@ -84,7 +92,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { platformFee, userPaysTotal, mechanicShare } = calculateFees(mechanicQuote)
+    const fees = calculateFees(effectiveLaborCost, effectivePartsCost)
 
     // Create Razorpay order
     const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID')!
@@ -97,13 +105,15 @@ Deno.serve(async (req) => {
         'Authorization': 'Basic ' + btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`),
       },
       body: JSON.stringify({
-        amount: Math.round(userPaysTotal * 100), // Razorpay uses paise
+        amount: Math.round(fees.total * 100), // paise
         currency: 'INR',
         receipt: `booking_${bookingId}`,
         notes: {
           booking_id: bookingId,
-          mechanic_quote: mechanicQuote.toString(),
-          platform_fee: platformFee.toString(),
+          labor_cost: fees.laborCost.toString(),
+          parts_cost: fees.partsCost.toString(),
+          tax: fees.tax.toString(),
+          platform_fee: fees.platformFee.toString(),
         },
       }),
     })
@@ -124,10 +134,13 @@ Deno.serve(async (req) => {
         booking_id: bookingId,
         user_id: userId,
         mechanic_id: booking.mechanic_id,
-        mechanic_quote: mechanicQuote,
-        platform_fee: platformFee,
-        user_paid_total: userPaysTotal,
-        mechanic_share: mechanicShare,
+        mechanic_quote: fees.subtotal,
+        labor_cost: fees.laborCost,
+        parts_cost: fees.partsCost,
+        tax_amount: fees.tax,
+        platform_fee: fees.platformFee,
+        user_paid_total: fees.total,
+        mechanic_share: fees.mechanicShare,
         status: 'pending',
         razorpay_order_id: razorpayOrder.id,
       })
@@ -141,12 +154,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Update booking with quote info
+    // Update booking with pricing info
     await supabase
       .from('bookings')
       .update({
-        mechanic_quote: mechanicQuote,
-        platform_fee: platformFee,
+        mechanic_quote: fees.subtotal,
+        labor_cost: fees.laborCost,
+        parts_cost: fees.partsCost,
+        tax_amount: fees.tax,
+        platform_fee: fees.platformFee,
         payment_status: 'pending',
       })
       .eq('id', bookingId)
@@ -154,13 +170,16 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       orderId: razorpayOrder.id,
       transactionId: transaction.id,
-      amount: userPaysTotal,
-      amountPaise: Math.round(userPaysTotal * 100),
+      amount: fees.total,
+      amountPaise: Math.round(fees.total * 100),
       breakdown: {
-        mechanicQuote,
-        platformFee,
-        userPaysTotal,
-        mechanicShare,
+        laborCost: fees.laborCost,
+        partsCost: fees.partsCost,
+        subtotal: fees.subtotal,
+        tax: fees.tax,
+        platformFee: fees.platformFee,
+        total: fees.total,
+        mechanicShare: fees.mechanicShare,
       },
       razorpayKeyId: RAZORPAY_KEY_ID,
     }), {

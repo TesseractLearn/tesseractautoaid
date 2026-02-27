@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMechanicProfile } from '@/hooks/useMechanicProfile';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, MapPin, Clock, CheckCircle2, Navigation, Star, Briefcase, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import CancelJobDialog from '@/components/CancelJobDialog';
+import { calculatePricing } from '@/lib/pricing';
 
 interface Job {
   id: string;
@@ -106,15 +108,24 @@ const JobsTab: React.FC = () => {
     setLoading(false);
   };
 
-  const handleComplete = async (jobId: string) => {
+  const handleComplete = async (jobId: string, actualHours: number, partsCost: number) => {
     setCompleting(jobId);
     try {
+      const hourlyRate = Number(mechanic?.hourly_rate) || 200;
+      const pricing = calculatePricing(hourlyRate, actualHours, partsCost);
+      
       const { error } = await supabase.from('bookings').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        actual_hours: actualHours,
+        parts_cost: partsCost,
+        labor_cost: pricing.laborCost,
+        mechanic_quote: pricing.subtotal,
+        platform_fee: pricing.platformFee,
+        tax_amount: pricing.tax,
       }).eq('id', jobId);
       if (error) throw error;
-      toast.success('Job marked as completed!');
+      toast.success(`Job completed! Invoice: ₹${pricing.total}`);
       fetchJobs();
     } catch {
       toast.error('Failed to update job');
@@ -164,7 +175,7 @@ const JobsTab: React.FC = () => {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">Active Jobs ({activeJobs.length})</h3>
               {activeJobs.map(job => (
-                <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} onCancelClick={() => setCancellingJobId(job.id)} />
+                 <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} onCancelClick={() => setCancellingJobId(job.id)} hourlyRate={Number(mechanic?.hourly_rate) || 200} />
               ))}
             </div>
           )}
@@ -183,7 +194,7 @@ const JobsTab: React.FC = () => {
                 <h3 className="text-sm font-semibold text-foreground mt-4">Recent Completed</h3>
               )}
               {(filter === 'active' ? historyJobs.slice(0, 5) : historyJobs).map(job => (
-                <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} />
+                <JobCard key={job.id} job={job} onComplete={handleComplete} completing={completing} hourlyRate={Number(mechanic?.hourly_rate) || 200} />
               ))}
             </div>
           )}
@@ -195,12 +206,18 @@ const JobsTab: React.FC = () => {
 
 const JobCard: React.FC<{
   job: Job;
-  onComplete: (id: string) => void;
+  onComplete: (id: string, hours: number, partsCost: number) => void;
   completing: string | null;
   onCancelClick?: () => void;
-}> = ({ job, onComplete, completing, onCancelClick }) => {
+  hourlyRate: number;
+}> = ({ job, onComplete, completing, onCancelClick, hourlyRate }) => {
   const isActive = ['accepted', 'mechanic_arriving', 'in_progress'].includes(job.status);
   const price = job.final_price || job.estimated_price;
+  const [showCompleteForm, setShowCompleteForm] = useState(false);
+  const [hours, setHours] = useState(2);
+  const [partsCost, setPartsCost] = useState(0);
+
+  const preview = calculatePricing(hourlyRate, hours, partsCost);
 
   return (
     <div className={`bg-card rounded-xl border p-4 ${isActive ? 'border-primary/30' : 'border-border'}`}>
@@ -238,18 +255,13 @@ const JobCard: React.FC<{
 
         {isActive && (
           <div className="flex gap-2">
-            {job.status === 'in_progress' && (
+            {job.status === 'in_progress' && !showCompleteForm && (
               <Button
                 size="sm"
                 className="text-xs h-8"
-                onClick={() => onComplete(job.id)}
-                disabled={completing === job.id}
+                onClick={() => setShowCompleteForm(true)}
               >
-                {completing === job.id ? (
-                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                ) : (
-                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                )}
+                <CheckCircle2 className="w-3 h-3 mr-1" />
                 Complete
               </Button>
             )}
@@ -267,6 +279,38 @@ const JobCard: React.FC<{
           </div>
         )}
       </div>
+
+      {/* Completion form with pricing */}
+      {showCompleteForm && (
+        <div className="mt-3 pt-3 border-t border-border space-y-3 animate-fade-in">
+          <p className="text-xs font-semibold text-foreground">Final Invoice Details</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground">Hours Worked</label>
+              <Input type="number" value={hours} onChange={(e) => setHours(Math.max(0.5, Number(e.target.value)))} min={0.5} step={0.5} className="h-8 text-sm" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground">Parts Cost (₹)</label>
+              <Input type="number" value={partsCost} onChange={(e) => setPartsCost(Math.max(0, Number(e.target.value)))} min={0} className="h-8 text-sm" />
+            </div>
+          </div>
+          <div className="bg-secondary/50 rounded-lg p-2 text-xs space-y-1">
+            <div className="flex justify-between"><span className="text-muted-foreground">Labor (₹{hourlyRate}/hr × {hours}hr)</span><span>₹{preview.laborCost}</span></div>
+            {partsCost > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Parts</span><span>₹{partsCost}</span></div>}
+            <div className="flex justify-between"><span className="text-muted-foreground">GST (18%)</span><span>₹{preview.tax}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Platform Fee (15%)</span><span>₹{preview.platformFee}</span></div>
+            <div className="flex justify-between font-semibold border-t border-border pt-1"><span>User Pays</span><span>₹{preview.total}</span></div>
+            <div className="flex justify-between text-success"><span>You Receive</span><span>₹{preview.mechanicShare}</span></div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 text-xs h-8" onClick={() => onComplete(job.id, hours, partsCost)} disabled={completing === job.id}>
+              {completing === job.id ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+              Confirm ₹{preview.total}
+            </Button>
+            <Button size="sm" variant="ghost" className="text-xs h-8" onClick={() => setShowCompleteForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

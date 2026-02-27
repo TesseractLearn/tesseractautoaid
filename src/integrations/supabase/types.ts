@@ -71,19 +71,23 @@ export type Database = {
       }
       bookings: {
         Row: {
+          actual_hours: number | null
           address: string | null
           completed_at: string | null
           created_at: string
+          estimated_hours: number | null
           estimated_price: number | null
           estimated_price_max: number | null
           estimated_price_min: number | null
           final_price: number | null
           id: string
           issue_description: string | null
+          labor_cost: number | null
           latitude: number
           longitude: number
           mechanic_id: string | null
           mechanic_quote: number | null
+          parts_cost: number | null
           payment_status: string | null
           platform_fee: number | null
           priority: string | null
@@ -91,23 +95,28 @@ export type Database = {
           service_type: string
           severity: string | null
           status: string
+          tax_amount: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          actual_hours?: number | null
           address?: string | null
           completed_at?: string | null
           created_at?: string
+          estimated_hours?: number | null
           estimated_price?: number | null
           estimated_price_max?: number | null
           estimated_price_min?: number | null
           final_price?: number | null
           id?: string
           issue_description?: string | null
+          labor_cost?: number | null
           latitude: number
           longitude: number
           mechanic_id?: string | null
           mechanic_quote?: number | null
+          parts_cost?: number | null
           payment_status?: string | null
           platform_fee?: number | null
           priority?: string | null
@@ -115,23 +124,28 @@ export type Database = {
           service_type: string
           severity?: string | null
           status?: string
+          tax_amount?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          actual_hours?: number | null
           address?: string | null
           completed_at?: string | null
           created_at?: string
+          estimated_hours?: number | null
           estimated_price?: number | null
           estimated_price_max?: number | null
           estimated_price_min?: number | null
           final_price?: number | null
           id?: string
           issue_description?: string | null
+          labor_cost?: number | null
           latitude?: number
           longitude?: number
           mechanic_id?: string | null
           mechanic_quote?: number | null
+          parts_cost?: number | null
           payment_status?: string | null
           platform_fee?: number | null
           priority?: string | null
@@ -139,6 +153,7 @@ export type Database = {
           service_type?: string
           severity?: string | null
           status?: string
+          tax_amount?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -273,6 +288,7 @@ export type Database = {
           documents_url: string | null
           experience_years: number | null
           full_name: string
+          hourly_rate: number | null
           id: string
           is_available: boolean | null
           is_verified: boolean | null
@@ -299,6 +315,7 @@ export type Database = {
           documents_url?: string | null
           experience_years?: number | null
           full_name: string
+          hourly_rate?: number | null
           id?: string
           is_available?: boolean | null
           is_verified?: boolean | null
@@ -325,6 +342,7 @@ export type Database = {
           documents_url?: string | null
           experience_years?: number | null
           full_name?: string
+          hourly_rate?: number | null
           id?: string
           is_available?: boolean | null
           is_verified?: boolean | null
@@ -557,10 +575,12 @@ export type Database = {
           dispute_reason: string | null
           disputed_at: string | null
           id: string
+          labor_cost: number | null
           mechanic_id: string
           mechanic_quote: number
           mechanic_share: number
           paid_at: string | null
+          parts_cost: number | null
           platform_fee: number
           razorpay_order_id: string | null
           razorpay_payment_id: string | null
@@ -568,6 +588,7 @@ export type Database = {
           refunded_at: string | null
           released_at: string | null
           status: string
+          tax_amount: number | null
           updated_at: string
           user_id: string
           user_paid_total: number
@@ -579,10 +600,12 @@ export type Database = {
           dispute_reason?: string | null
           disputed_at?: string | null
           id?: string
+          labor_cost?: number | null
           mechanic_id: string
           mechanic_quote?: number
           mechanic_share?: number
           paid_at?: string | null
+          parts_cost?: number | null
           platform_fee?: number
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
@@ -590,6 +613,7 @@ export type Database = {
           refunded_at?: string | null
           released_at?: string | null
           status?: string
+          tax_amount?: number | null
           updated_at?: string
           user_id: string
           user_paid_total?: number
@@ -601,10 +625,12 @@ export type Database = {
           dispute_reason?: string | null
           disputed_at?: string | null
           id?: string
+          labor_cost?: number | null
           mechanic_id?: string
           mechanic_quote?: number
           mechanic_share?: number
           paid_at?: string | null
+          parts_cost?: number | null
           platform_fee?: number
           razorpay_order_id?: string | null
           razorpay_payment_id?: string | null
@@ -612,6 +638,7 @@ export type Database = {
           refunded_at?: string | null
           released_at?: string | null
           status?: string
+          tax_amount?: number | null
           updated_at?: string
           user_id?: string
           user_paid_total?: number

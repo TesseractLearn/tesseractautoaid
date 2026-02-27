@@ -2,10 +2,15 @@ import React from 'react';
 import { Shield, ArrowRight } from 'lucide-react';
 
 interface PaymentBreakdownCardProps {
-  mechanicQuote: number;
+  laborCost: number;
+  partsCost: number;
+  subtotal: number;
+  tax: number;
   platformFee: number;
-  userPaysTotal: number;
+  total: number;
   mechanicShare: number;
+  hours?: number;
+  hourlyRate?: number;
   status?: string;
   compact?: boolean;
 }
@@ -21,10 +26,15 @@ const statusLabels: Record<string, { label: string; className: string }> = {
 };
 
 const PaymentBreakdownCard: React.FC<PaymentBreakdownCardProps> = ({
-  mechanicQuote,
+  laborCost,
+  partsCost,
+  subtotal,
+  tax,
   platformFee,
-  userPaysTotal,
+  total,
   mechanicShare,
+  hours,
+  hourlyRate,
   status,
   compact = false,
 }) => {
@@ -35,12 +45,12 @@ const PaymentBreakdownCard: React.FC<PaymentBreakdownCardProps> = ({
       <div className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-primary" />
-          <span className="text-sm text-foreground font-medium">₹{userPaysTotal}</span>
+          <span className="text-sm text-foreground font-medium">₹{total}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>₹{mechanicQuote} service</span>
+          <span>₹{subtotal} service</span>
           <ArrowRight className="w-3 h-3" />
-          <span>₹{platformFee} fee</span>
+          <span>₹{tax} GST</span>
         </div>
         {statusInfo && (
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusInfo.className}`}>
@@ -56,7 +66,7 @@ const PaymentBreakdownCard: React.FC<PaymentBreakdownCardProps> = ({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Shield className="w-4 h-4 text-primary" />
-          Payment Breakdown
+          Invoice Breakdown
         </h3>
         {statusInfo && (
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusInfo.className}`}>
@@ -65,9 +75,30 @@ const PaymentBreakdownCard: React.FC<PaymentBreakdownCardProps> = ({
         )}
       </div>
       <div className="space-y-2">
+        {hours && hourlyRate ? (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Labor (₹{hourlyRate}/hr × {hours}hr)</span>
+            <span className="text-foreground">₹{laborCost}</span>
+          </div>
+        ) : (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Labor</span>
+            <span className="text-foreground">₹{laborCost}</span>
+          </div>
+        )}
+        {partsCost > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Parts</span>
+            <span className="text-foreground">₹{partsCost}</span>
+          </div>
+        )}
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Mechanic Quote</span>
-          <span className="text-foreground">₹{mechanicQuote}</span>
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="text-foreground">₹{subtotal}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">GST (18%)</span>
+          <span className="text-foreground">₹{tax}</span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Platform Fee (15%)</span>
@@ -75,7 +106,7 @@ const PaymentBreakdownCard: React.FC<PaymentBreakdownCardProps> = ({
         </div>
         <div className="border-t border-border pt-2 flex justify-between">
           <span className="font-semibold text-foreground">You Pay</span>
-          <span className="text-lg font-bold text-foreground">₹{userPaysTotal}</span>
+          <span className="text-lg font-bold text-foreground">₹{total}</span>
         </div>
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <Shield className="w-3 h-3 text-success" />

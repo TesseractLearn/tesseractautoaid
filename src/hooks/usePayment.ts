@@ -1,20 +1,24 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { calculatePricing, type PricingBreakdown } from '@/lib/pricing';
 
-interface PaymentBreakdown {
-  mechanicQuote: number;
-  platformFee: number;
-  userPaysTotal: number;
-  mechanicShare: number;
-}
+export type { PricingBreakdown };
 
 interface PaymentOrder {
   orderId: string;
   transactionId: string;
   amount: number;
   amountPaise: number;
-  breakdown: PaymentBreakdown;
+  breakdown: {
+    laborCost: number;
+    partsCost: number;
+    subtotal: number;
+    tax: number;
+    platformFee: number;
+    total: number;
+    mechanicShare: number;
+  };
   razorpayKeyId: string;
 }
 
@@ -22,11 +26,15 @@ export const usePayment = () => {
   const [loading, setLoading] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
 
-  const createPaymentOrder = useCallback(async (bookingId: string, mechanicQuote: number) => {
+  const createPaymentOrder = useCallback(async (
+    bookingId: string,
+    laborCost: number,
+    partsCost: number = 0,
+  ) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-payment-order', {
-        body: { bookingId, mechanicQuote },
+        body: { bookingId, laborCost, partsCost },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -53,7 +61,7 @@ export const usePayment = () => {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success('Payment verified! Funds held securely in escrow.');
+      toast.success('Payment verified! Funds held securely.');
       return true;
     } catch (err: any) {
       toast.error('Payment verification failed: ' + err.message);
@@ -99,12 +107,13 @@ export const usePayment = () => {
     }
   }, []);
 
-  // Local calculation for preview (before API call)
-  const calculateBreakdown = useCallback((mechanicQuote: number): PaymentBreakdown => {
-    const platformFee = Math.max(Math.round(mechanicQuote * 0.15), 50);
-    const userPaysTotal = mechanicQuote + platformFee;
-    const mechanicShare = mechanicQuote - platformFee;
-    return { mechanicQuote, platformFee, userPaysTotal, mechanicShare };
+  // Local calculation for previews
+  const calculateBreakdown = useCallback((
+    hourlyRate: number,
+    hours: number,
+    partsCost: number = 0,
+  ): PricingBreakdown => {
+    return calculatePricing(hourlyRate, hours, partsCost);
   }, []);
 
   return {
