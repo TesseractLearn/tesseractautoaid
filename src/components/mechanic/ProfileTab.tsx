@@ -10,20 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   User, Phone, MapPin, Star, Shield, ShieldCheck,
-  Loader2, Save, Navigation, Clock, Wrench, CheckCircle2, LogOut,
+  Loader2, Save, Navigation, Clock, LogOut,
 } from 'lucide-react';
+import ServicesPicker from '@/components/mechanic/ServicesPicker';
 import { useAuth } from '@/contexts/AuthContext';
 
-const ALL_SERVICES = [
-  { id: 'puncture', label: 'Flat Tire / Puncture' },
-  { id: 'battery', label: 'Battery & Electrical' },
-  { id: 'engine', label: 'Engine Repair' },
-  { id: 'towing', label: 'Towing' },
-  { id: 'ac_repair', label: 'AC Repair' },
-  { id: 'oil_service', label: 'Oil & Lube' },
-  { id: 'general', label: 'General Repair' },
-  { id: 'denting', label: 'Denting & Painting' },
-];
 
 const ProfileTab: React.FC = () => {
   const { logout } = useAuth();
@@ -48,11 +39,6 @@ const ProfileTab: React.FC = () => {
     setIsOnline(mechanic.is_available ?? false);
   }, [mechanic]);
 
-  const toggleService = (id: string) => {
-    setServicesOffered(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
-  };
 
   const handleToggleOnline = async (checked: boolean) => {
     if (!mechanic) return;
@@ -193,27 +179,7 @@ const ProfileTab: React.FC = () => {
       </div>
 
       {/* Services offered */}
-      <div>
-        <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
-          <Wrench className="w-4 h-4 text-muted-foreground" /> Services Offered
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {ALL_SERVICES.map(s => {
-            const active = servicesOffered.includes(s.id);
-            return (
-              <Badge
-                key={s.id}
-                variant={active ? 'default' : 'outline'}
-                className={`cursor-pointer transition-all ${active ? 'bg-primary text-primary-foreground' : 'hover:border-primary'}`}
-                onClick={() => toggleService(s.id)}
-              >
-                {active && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                {s.label}
-              </Badge>
-            );
-          })}
-        </div>
-      </div>
+      <ServicesPicker selected={servicesOffered} onChange={setServicesOffered} />
 
       {/* Save */}
       <Button onClick={handleSave} disabled={saving} className="w-full">
