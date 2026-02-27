@@ -8,6 +8,7 @@ import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import CancelJobDialog from '@/components/CancelJobDialog';
 import { 
   MapPin, 
   Bell, 
@@ -67,6 +68,32 @@ const MechanicHome: React.FC = () => {
   const [isOnline, setIsOnline] = useState(false);
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+
+  const handleCancelJob = async (jobId: string, reason: string) => {
+    try {
+      const { error } = await supabase.from('bookings').update({
+        status: 'mechanic_cancelled',
+        issue_description: `[MECHANIC_CANCELLED] ${reason}`,
+      }).eq('id', jobId);
+      if (error) throw error;
+      toast.success('Job cancelled');
+      setCancellingJobId(null);
+      // Refresh recent jobs
+      if (mechanic?.id) {
+        const { data } = await supabase
+          .from('bookings')
+          .select('id, service_type, status, created_at, final_price, estimated_price, address')
+          .eq('mechanic_id', mechanic.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        setRecentJobs(data || []);
+      }
+    } catch {
+      toast.error('Failed to cancel job');
+      throw new Error('cancel failed');
+    }
+  };
 
   const firstName = mechanic?.full_name?.split(' ')[0] || 'Mechanic';
 
@@ -414,28 +441,50 @@ const MechanicHome: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentJobs.map((job) => (
-                  <div key={job.id} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                      {serviceIconMap[job.service_type] || <WrenchIcon size={16} />}
+                {recentJobs.map((job) => {
+                  const isActive = ['accepted', 'mechanic_arriving', 'in_progress'].includes(job.status);
+                  return (
+                    <div key={job.id} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        {serviceIconMap[job.service_type] || <WrenchIcon size={16} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground capitalize">{job.service_type.replace('_', ' ')}</p>
+                        <p className="text-xs text-muted-foreground truncate">{job.address || 'No address'}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">₹{job.final_price || job.estimated_price || '—'}</p>
+                          <p className={`text-[10px] font-medium capitalize ${job.status === 'completed' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                            {job.status.replace('_', ' ')}
+                          </p>
+                        </div>
+                        {isActive && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="text-xs h-7 px-2"
+                            onClick={() => setCancellingJobId(job.id)}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground capitalize">{job.service_type.replace('_', ' ')}</p>
-                      <p className="text-xs text-muted-foreground truncate">{job.address || 'No address'}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-medium text-foreground">₹{job.final_price || job.estimated_price || '—'}</p>
-                      <p className={`text-[10px] font-medium capitalize ${job.status === 'completed' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                        {job.status}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </section>
       </main>
+
+      <CancelJobDialog
+        open={!!cancellingJobId}
+        onOpenChange={(open) => { if (!open) setCancellingJobId(null); }}
+        onConfirm={(reason) => handleCancelJob(cancellingJobId!, reason)}
+        role="mechanic"
+      />
     </div>
   );
 };

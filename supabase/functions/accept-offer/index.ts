@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     // Verify caller is this mechanic
     const { data: mechanic } = await supabase
       .from('mechanics')
-      .select('id')
+      .select('id, active_jobs_count, recent_jobs_count, total_jobs_count')
       .eq('id', mechanicId)
       .eq('user_id', userId)
       .single()
@@ -131,13 +131,13 @@ Deno.serve(async (req) => {
       .eq('booking_id', bookingId)
       .neq('id', offer.id)
 
-    // Increment mechanic job counts
+    // Increment mechanic job counts properly
     await supabase
       .from('mechanics')
       .update({
-        active_jobs_count: (mechanic as any).active_jobs_count ? (mechanic as any).active_jobs_count + 1 : 1,
-        recent_jobs_count: (mechanic as any).recent_jobs_count ? (mechanic as any).recent_jobs_count + 1 : 1,
-        total_jobs_count: (mechanic as any).total_jobs_count ? (mechanic as any).total_jobs_count + 1 : 1,
+        active_jobs_count: (mechanic.active_jobs_count || 0) + 1,
+        recent_jobs_count: (mechanic.recent_jobs_count || 0) + 1,
+        total_jobs_count: (mechanic.total_jobs_count || 0) + 1,
       })
       .eq('id', mechanicId)
 
