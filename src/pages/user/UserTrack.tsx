@@ -20,6 +20,11 @@ interface ActiveBooking {
   mechanic_quote: number | null;
   platform_fee: number | null;
   payment_status: string | null;
+  labor_cost: number | null;
+  parts_cost: number | null;
+  tax_amount: number | null;
+  estimated_hours: number | null;
+  actual_hours: number | null;
   mechanic: {
     id: string;
     full_name: string;
@@ -28,6 +33,7 @@ interface ActiveBooking {
     rating: number;
     latitude: number;
     longitude: number;
+    hourly_rate: number | null;
   } | null;
   transaction?: {
     id: string;
@@ -36,6 +42,9 @@ interface ActiveBooking {
     platform_fee: number;
     user_paid_total: number;
     mechanic_share: number;
+    labor_cost: number;
+    parts_cost: number;
+    tax_amount: number;
   } | null;
 }
 
@@ -87,7 +96,7 @@ const UserTrack: React.FC = () => {
 
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, status, service_type, mechanic_id, latitude, longitude, mechanic_quote, platform_fee, payment_status')
+        .select('id, status, service_type, mechanic_id, latitude, longitude, mechanic_quote, platform_fee, payment_status, labor_cost, parts_cost, tax_amount, estimated_hours, actual_hours')
         .eq('user_id', user.id)
         .in('status', ['accepted', 'mechanic_arriving', 'in_progress', 'completed'])
         .order('created_at', { ascending: false })
@@ -99,14 +108,14 @@ const UserTrack: React.FC = () => {
       if (data && data.mechanic_id) {
         const { data: mech } = await supabase
           .from('mechanics')
-          .select('id, full_name, phone, specialization, rating, latitude, longitude')
+          .select('id, full_name, phone, specialization, rating, latitude, longitude, hourly_rate')
           .eq('id', data.mechanic_id)
           .maybeSingle();
 
         // Fetch transaction if exists
         const { data: tx } = await supabase
           .from('transactions')
-          .select('id, status, mechanic_quote, platform_fee, user_paid_total, mechanic_share')
+          .select('id, status, mechanic_quote, platform_fee, user_paid_total, mechanic_share, labor_cost, parts_cost, tax_amount')
           .eq('booking_id', data.id)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -359,7 +368,10 @@ const UserTrack: React.FC = () => {
               mechanicName={activeBooking.mechanic.full_name}
               mechanicRating={activeBooking.mechanic.rating}
               serviceType={activeBooking.service_type}
-              estimatedQuote={activeBooking.mechanic_quote || 500}
+              hourlyRate={Number(activeBooking.mechanic.hourly_rate) || 200}
+              estimatedHours={Number(activeBooking.estimated_hours) || 2}
+              actualHours={activeBooking.actual_hours ? Number(activeBooking.actual_hours) : undefined}
+              partsCost={Number(activeBooking.parts_cost) || 0}
               onPaymentComplete={() => {
                 setShowPayment(false);
                 fetchActiveBooking();
@@ -373,10 +385,13 @@ const UserTrack: React.FC = () => {
             <JobCompletion
               transactionId={activeBooking.transaction.id}
               mechanicName={activeBooking.mechanic.full_name}
-              mechanicQuote={activeBooking.transaction.mechanic_quote}
-              platformFee={activeBooking.transaction.platform_fee}
-              mechanicShare={activeBooking.transaction.mechanic_share}
-              userPaidTotal={activeBooking.transaction.user_paid_total}
+              laborCost={Number(activeBooking.transaction.labor_cost) || 0}
+              partsCost={Number(activeBooking.transaction.parts_cost) || 0}
+              subtotal={Number(activeBooking.transaction.mechanic_quote) || 0}
+              tax={Number(activeBooking.transaction.tax_amount) || 0}
+              platformFee={Number(activeBooking.transaction.platform_fee) || 0}
+              total={Number(activeBooking.transaction.user_paid_total) || 0}
+              mechanicShare={Number(activeBooking.transaction.mechanic_share) || 0}
               onPaymentReleased={() => {
                 setShowCompletion(false);
                 fetchActiveBooking();
@@ -425,9 +440,12 @@ const UserTrack: React.FC = () => {
               {/* Payment breakdown (if quote exists) */}
               {activeBooking.mechanic_quote && activeBooking.mechanic_quote > 0 && (
                 <PaymentBreakdownCard
-                  mechanicQuote={Number(activeBooking.mechanic_quote)}
-                  platformFee={Number(activeBooking.platform_fee || 0)}
-                  userPaysTotal={Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0)}
+                  laborCost={Number(activeBooking.labor_cost) || 0}
+                  partsCost={Number(activeBooking.parts_cost) || 0}
+                  subtotal={Number(activeBooking.mechanic_quote) || 0}
+                  tax={Number(activeBooking.tax_amount) || 0}
+                  platformFee={Number(activeBooking.platform_fee) || 0}
+                  total={Number(activeBooking.mechanic_quote) + Number(activeBooking.platform_fee || 0) + Number(activeBooking.tax_amount || 0)}
                   mechanicShare={Number(activeBooking.mechanic_quote) - Number(activeBooking.platform_fee || 0)}
                   status={activeBooking.payment_status || undefined}
                   compact

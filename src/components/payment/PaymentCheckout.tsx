@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { Shield, CreditCard, Smartphone, Wallet, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Shield, CreditCard, Smartphone, Wallet, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { usePayment } from '@/hooks/usePayment';
+import { calculatePricing } from '@/lib/pricing';
+import PaymentBreakdownCard from './PaymentBreakdownCard';
 
 interface PaymentCheckoutProps {
   bookingId: string;
   mechanicName: string;
   mechanicRating: number | null;
   serviceType: string;
-  estimatedQuote: number;
+  hourlyRate: number;
+  estimatedHours: number;
+  actualHours?: number;
+  partsCost?: number;
   onPaymentComplete: () => void;
   onCancel: () => void;
 }
@@ -27,18 +31,24 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
   mechanicName,
   mechanicRating,
   serviceType,
-  estimatedQuote,
+  hourlyRate,
+  estimatedHours,
+  actualHours,
+  partsCost: initialPartsCost = 0,
   onPaymentComplete,
   onCancel,
 }) => {
-  const { loading, createPaymentOrder, verifyPayment, calculateBreakdown } = usePayment();
+  const { loading, createPaymentOrder, verifyPayment } = usePayment();
   const [step, setStep] = useState<'quote' | 'paying' | 'success'>('quote');
-  const [quote, setQuote] = useState(estimatedQuote);
-  const breakdown = calculateBreakdown(quote);
+  const [hours, setHours] = useState(actualHours ?? estimatedHours);
+  const [rate, setRate] = useState(hourlyRate);
+  const [partsCost, setPartsCost] = useState(initialPartsCost);
+
+  const breakdown = calculatePricing(rate, hours, partsCost);
 
   const handlePay = async () => {
     setStep('paying');
-    const order = await createPaymentOrder(bookingId, quote);
+    const order = await createPaymentOrder(bookingId, breakdown.laborCost, breakdown.partsCost);
     if (!order) {
       setStep('quote');
       return;
@@ -74,9 +84,7 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
           setStep('quote');
         }
       },
-      modal: {
-        ondismiss: () => setStep('quote'),
-      },
+      modal: { ondismiss: () => setStep('quote') },
       prefill: {},
       theme: { color: '#2563EB' },
     };
@@ -93,7 +101,7 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
         </div>
         <h2 className="text-xl font-bold text-foreground">Payment Successful!</h2>
         <p className="text-sm text-muted-foreground text-center">
-          ₹{breakdown.userPaysTotal} held securely in escrow.<br />
+          ₹{breakdown.total} held securely.<br />
           Funds will be released when you confirm job completion.
         </p>
       </div>
@@ -122,43 +130,50 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
         )}
       </div>
 
-      {/* Quote input */}
+      {/* Pricing inputs */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-medium text-foreground mb-1 block">Rate (₹/hr)</label>
+          <Input
+            type="number"
+            value={rate}
+            onChange={(e) => setRate(Math.max(0, Number(e.target.value)))}
+            min={0}
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-foreground mb-1 block">Hours</label>
+          <Input
+            type="number"
+            value={hours}
+            onChange={(e) => setHours(Math.max(0.5, Number(e.target.value)))}
+            min={0.5}
+            step={0.5}
+          />
+        </div>
+      </div>
       <div>
-        <label className="text-sm font-medium text-foreground mb-2 block">Mechanic Quote (₹)</label>
+        <label className="text-xs font-medium text-foreground mb-1 block">Parts Cost (₹)</label>
         <Input
           type="number"
-          value={quote}
-          onChange={(e) => setQuote(Math.max(0, Number(e.target.value)))}
+          value={partsCost}
+          onChange={(e) => setPartsCost(Math.max(0, Number(e.target.value)))}
           min={0}
-          className="text-lg font-bold"
         />
-        <p className="text-xs text-muted-foreground mt-1">
-          Auto-estimated from symptoms. Mechanic may adjust.
-        </p>
       </div>
 
       {/* Transparent breakdown */}
-      <div className="bg-secondary/50 rounded-xl p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Price Breakdown</h3>
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Mechanic Quote</span>
-            <span className="text-foreground">₹{breakdown.mechanicQuote}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Platform Service (15%)</span>
-            <span className="text-foreground">₹{breakdown.platformFee}</span>
-          </div>
-          <div className="border-t border-border pt-2 flex justify-between">
-            <span className="font-semibold text-foreground">Total</span>
-            <span className="text-lg font-bold text-foreground">₹{breakdown.userPaysTotal}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-card rounded-lg p-2">
-          <Shield className="w-4 h-4 text-success shrink-0" />
-          <span>Mechanic receives ₹{breakdown.mechanicShare} after platform fee</span>
-        </div>
-      </div>
+      <PaymentBreakdownCard
+        laborCost={breakdown.laborCost}
+        partsCost={breakdown.partsCost}
+        subtotal={breakdown.subtotal}
+        tax={breakdown.tax}
+        platformFee={breakdown.platformFee}
+        total={breakdown.total}
+        mechanicShare={breakdown.mechanicShare}
+        hours={hours}
+        hourlyRate={rate}
+      />
 
       {/* Payment methods hint */}
       <div className="flex items-center justify-center gap-4 text-muted-foreground">
@@ -179,14 +194,14 @@ const PaymentCheckout: React.FC<PaymentCheckoutProps> = ({
           size="lg"
           className="w-full"
           onClick={handlePay}
-          disabled={loading || quote <= 0}
+          disabled={loading || breakdown.total <= 0}
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
           ) : (
             <Shield className="w-5 h-5 mr-2" />
           )}
-          Pay ₹{breakdown.userPaysTotal} Securely
+          Pay ₹{breakdown.total} Securely
         </Button>
         <Button variant="ghost" className="w-full" onClick={onCancel} disabled={loading}>
           Cancel
