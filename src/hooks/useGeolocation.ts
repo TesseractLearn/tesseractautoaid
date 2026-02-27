@@ -81,21 +81,48 @@ export const useGeolocation = (options: UseGeolocationOptions = {}) => {
     return 'prompt';
   }, []);
 
-  // Update permission state on mount and listen for changes
+  // Update permission state on mount, auto-request if already granted, and listen for changes
   useEffect(() => {
+    let mounted = true;
     const updatePermissionState = async () => {
       const permState = await checkPermission();
+      if (!mounted) return;
       setState(prev => ({ ...prev, permissionState: permState }));
+      // Auto-request location if permission already granted (avoid re-prompting)
+      if (permState === 'granted') {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (!mounted) return;
+            setState(prev => ({
+              ...prev,
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              error: null,
+              errorCode: null,
+              loading: false,
+              permissionState: 'granted',
+              timestamp: position.timestamp,
+              source: 'gps',
+            }));
+          },
+          () => {}, // silently ignore errors on auto-request
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      }
     };
     updatePermissionState();
 
     if ('permissions' in navigator) {
       navigator.permissions.query({ name: 'geolocation' }).then(permission => {
         permission.onchange = () => {
+          if (!mounted) return;
           setState(prev => ({ ...prev, permissionState: permission.state as PermissionState }));
         };
       }).catch(() => {});
     }
+
+    return () => { mounted = false; };
   }, [checkPermission]);
 
   // Success handler

@@ -79,12 +79,7 @@ const UserHome: React.FC = () => {
   } = useGeolocation();
   const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
 
-  // Silently request location if permission already granted
-  useEffect(() => {
-    if (permissionState === 'granted' && !hasLocation) {
-      requestLocation();
-    }
-  }, [permissionState, hasLocation, requestLocation]);
+  // Location is now auto-requested by useGeolocation when permission is already granted
 
   const firstName = displayName?.split(' ')[0] || null;
 

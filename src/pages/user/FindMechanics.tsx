@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio } from 'lucide-react';
+import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -370,9 +370,21 @@ const FindMechanics: React.FC = () => {
               <div id="mechanic-list">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-base font-semibold text-foreground">Nearby Mechanics</h2>
-                  <span className="text-xs text-muted-foreground">
-                    {onlineMechanics.length} online · {nearbyMechanics.length} total
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => latitude && longitude && fetchNearbyMechanics(latitude, longitude)}
+                      disabled={mechanicsLoading || !hasLocation}
+                      className="text-xs h-7 px-2"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 mr-1 ${mechanicsLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {onlineMechanics.length} online · {nearbyMechanics.length} total
+                    </span>
+                  </div>
                 </div>
                 {!selectedService && (
                   <p className="text-xs text-destructive mb-3">⚠ Select a service above first</p>
@@ -405,6 +417,16 @@ const FindMechanics: React.FC = () => {
                 <User className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No mechanics found nearby</p>
                 <p className="text-xs text-muted-foreground mt-1">Try broadcasting your request — mechanics may respond</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => latitude && longitude && fetchNearbyMechanics(latitude, longitude)}
+                  disabled={mechanicsLoading}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${mechanicsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
               </div>
             )}
 
