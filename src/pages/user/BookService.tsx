@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { useReverseGeocode } from '@/hooks/useReverseGeocode';
 import { 
   ArrowLeft, 
   MapPin, 
@@ -10,7 +13,8 @@ import {
   Clock,
   ChevronRight,
   Navigation,
-  CheckCircle
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
 
 const serviceDetails: Record<string, { name: string; basePrice: number; description: string }> = {
@@ -24,24 +28,92 @@ const serviceDetails: Record<string, { name: string; basePrice: number; descript
   general: { name: 'General Repair', basePrice: 500, description: 'General vehicle repair and maintenance' },
 };
 
-const nearbyMechanics = [
-  { id: 1, name: 'Raju Kumar', rating: 4.8, jobs: 234, distance: '0.8 km', eta: '8 min', speciality: 'Engine Expert', avatar: 'raju' },
-  { id: 2, name: 'Suresh Sharma', rating: 4.6, jobs: 156, distance: '1.2 km', eta: '12 min', speciality: 'Battery Specialist', avatar: 'suresh' },
-  { id: 3, name: 'Amit Patel', rating: 4.9, jobs: 312, distance: '1.5 km', eta: '15 min', speciality: 'All Rounder', avatar: 'amit' },
-];
+interface NearbyMechanic {
+  id: string;
+  full_name: string;
+  rating: number;
+  total_jobs_count: number;
+  specialization: string | null;
+  latitude: number;
+  longitude: number;
+  distance: number;
+  eta: string;
+}
+
+const haversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 const BookService: React.FC = () => {
   const navigate = useNavigate();
   const { serviceType } = useParams<{ serviceType: string }>();
   const [step, setStep] = useState<'details' | 'mechanic' | 'confirm'>('details');
   const [description, setDescription] = useState('');
-  const [selectedMechanic, setSelectedMechanic] = useState<number | null>(null);
-  const [location] = useState('Bandra West, Mumbai');
+  const [selectedMechanic, setSelectedMechanic] = useState<string | null>(null);
+
+  const { latitude, longitude, loading: geoLoading } = useGeolocation();
+  const { placeName } = useReverseGeocode(latitude, longitude);
+  const location = placeName || 'Getting location...';
+
+  const [mechanics, setMechanics] = useState<NearbyMechanic[]>([]);
+  const [mechanicsLoading, setMechanicsLoading] = useState(false);
 
   const service = serviceDetails[serviceType || 'general'] || serviceDetails.general;
 
+  // Fetch nearby mechanics when moving to mechanic step
+  useEffect(() => {
+    if (step !== 'mechanic' || !latitude || !longitude) return;
+
+    const fetchMechanics = async () => {
+      setMechanicsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('mechanics_public')
+          .select('id, full_name, specialization, latitude, longitude, rating, is_available, total_jobs_count');
+
+        if (error) throw error;
+
+        const nearby = (data || [])
+          .filter(m => m.is_available && m.latitude && m.longitude)
+          .map(m => {
+            const dist = haversineDistance(latitude, longitude, m.latitude!, m.longitude!);
+            const etaMin = Math.round((dist / 30) * 60); // ~30 km/h avg
+            return {
+              id: m.id!,
+              full_name: m.full_name || 'Unknown',
+              rating: Number(m.rating) || 0,
+              total_jobs_count: m.total_jobs_count || 0,
+              specialization: m.specialization,
+              latitude: m.latitude!,
+              longitude: m.longitude!,
+              distance: dist,
+              eta: etaMin < 60 ? `${etaMin} min` : `${(etaMin / 60).toFixed(1)} hr`,
+            } as NearbyMechanic;
+          })
+          .sort((a, b) => a.distance - b.distance);
+
+        setMechanics(nearby);
+      } catch (err) {
+        console.error('Failed to fetch mechanics:', err);
+      } finally {
+        setMechanicsLoading(false);
+      }
+    };
+
+    fetchMechanics();
+  }, [step, latitude, longitude]);
+
+  const selectedMech = mechanics.find(m => m.id === selectedMechanic);
+
   const handleConfirmBooking = () => {
-    // In real app, this would create a booking
     navigate('/user/track');
   };
 
@@ -85,7 +157,7 @@ const BookService: React.FC = () => {
                   <MapPin className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-foreground">{location}</p>
+                  <p className="font-medium text-foreground">{geoLoading ? 'Getting location...' : location}</p>
                   <p className="text-xs text-muted-foreground">Tap to change location</p>
                 </div>
                 <Navigation className="w-5 h-5 text-primary" />
@@ -126,58 +198,74 @@ const BookService: React.FC = () => {
         {step === 'mechanic' && (
           <div className="space-y-4 animate-fade-in">
             <p className="text-sm text-muted-foreground">Select a mechanic based on ratings and proximity</p>
-            
-            {nearbyMechanics.map((mechanic, index) => (
-              <button
-                key={mechanic.id}
-                onClick={() => setSelectedMechanic(mechanic.id)}
-                className={`w-full bg-card rounded-xl p-4 border-2 transition-all animate-fade-in ${
-                  selectedMechanic === mechanic.id 
-                    ? 'border-primary shadow-md' 
-                    : 'border-border/50 hover:border-primary/30'
-                }`}
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img 
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${mechanic.avatar}`}
-                      alt={mechanic.name}
-                      className="w-14 h-14 rounded-full"
-                    />
-                    {selectedMechanic === mechanic.id && (
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                        <CheckCircle className="w-4 h-4 text-primary-foreground" />
+
+            {mechanicsLoading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Finding nearby mechanics...</p>
+              </div>
+            ) : mechanics.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                <MapPin className="w-10 h-10 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">No mechanics available nearby right now. Try again later.</p>
+              </div>
+            ) : (
+              mechanics.map((mechanic, index) => (
+                <button
+                  key={mechanic.id}
+                  onClick={() => setSelectedMechanic(mechanic.id)}
+                  className={`w-full bg-card rounded-xl p-4 border-2 transition-all animate-fade-in ${
+                    selectedMechanic === mechanic.id 
+                      ? 'border-primary shadow-md' 
+                      : 'border-border/50 hover:border-primary/30'
+                  }`}
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <img 
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${mechanic.full_name}`}
+                        alt={mechanic.full_name}
+                        className="w-14 h-14 rounded-full"
+                      />
+                      {selectedMechanic === mechanic.id && (
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 text-primary-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground">{mechanic.full_name}</h3>
+                        <span className="flex items-center gap-0.5 text-xs bg-success/10 text-success px-2 py-0.5 rounded-full">
+                          <Star className="w-3 h-3 fill-current" />
+                          {mechanic.rating.toFixed(1)}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">{mechanic.name}</h3>
-                      <span className="flex items-center gap-0.5 text-xs bg-success/10 text-success px-2 py-0.5 rounded-full">
-                        <Star className="w-3 h-3 fill-current" />
-                        {mechanic.rating}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{mechanic.speciality} • {mechanic.jobs} jobs</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {mechanic.distance}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        ETA {mechanic.eta}
-                      </span>
+                      <p className="text-xs text-muted-foreground">
+                        {mechanic.specialization || 'General'} • {mechanic.total_jobs_count} jobs
+                      </p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {mechanic.distance < 1
+                            ? `${(mechanic.distance * 1000).toFixed(0)}m`
+                            : `${mechanic.distance.toFixed(1)} km`}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          ETA {mechanic.eta}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </div>
         )}
 
-        {step === 'confirm' && selectedMechanic && (
+        {step === 'confirm' && selectedMech && (
           <div className="space-y-6 animate-fade-in">
             <div className="text-center py-4">
               <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
@@ -201,13 +289,13 @@ const BookService: React.FC = () => {
                 <p className="text-xs text-muted-foreground mb-1">Mechanic</p>
                 <div className="flex items-center gap-3">
                   <img 
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${nearbyMechanics.find(m => m.id === selectedMechanic)?.avatar}`}
+                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMech.full_name}`}
                     alt=""
                     className="w-10 h-10 rounded-full"
                   />
                   <div>
-                    <p className="font-medium text-foreground">{nearbyMechanics.find(m => m.id === selectedMechanic)?.name}</p>
-                    <p className="text-xs text-muted-foreground">ETA: {nearbyMechanics.find(m => m.id === selectedMechanic)?.eta}</p>
+                    <p className="font-medium text-foreground">{selectedMech.full_name}</p>
+                    <p className="text-xs text-muted-foreground">ETA: {selectedMech.eta}</p>
                   </div>
                 </div>
               </div>
