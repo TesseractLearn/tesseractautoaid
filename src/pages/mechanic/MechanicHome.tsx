@@ -58,10 +58,12 @@ const MechanicHome: React.FC = () => {
   const { 
     latitude, 
     longitude, 
+    accuracy,
     loading: locationLoading, 
     permissionState, 
     hasLocation,
-    requestLocation 
+    requestLocation,
+    accuracyLevel 
   } = useGeolocation();
   const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
 
@@ -270,6 +272,15 @@ const MechanicHome: React.FC = () => {
               <p className="text-xs text-primary-foreground/60">Your location</p>
               <p className="text-sm font-medium">{locationDisplay}</p>
             </div>
+            {hasLocation && accuracy && (
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                accuracyLevel === 'good' ? 'bg-emerald-500/20 text-emerald-300' :
+                accuracyLevel === 'ok' ? 'bg-amber-500/20 text-amber-300' :
+                'bg-red-500/20 text-red-300'
+              }`}>
+                ±{accuracy < 1000 ? `${Math.round(accuracy)}m` : `${(accuracy / 1000).toFixed(1)}km`}
+              </span>
+            )}
             <ChevronRight className="w-5 h-5 text-primary-foreground/60" />
           </button>
         </div>
