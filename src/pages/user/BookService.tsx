@@ -70,7 +70,7 @@ const BookService: React.FC = () => {
 
   // Fetch nearby mechanics when moving to mechanic step
   useEffect(() => {
-    if (step !== 'mechanic' || !latitude || !longitude) return;
+    if (step !== 'mechanic') return;
 
     const fetchMechanics = async () => {
       setMechanicsLoading(true);
@@ -81,11 +81,15 @@ const BookService: React.FC = () => {
 
         if (error) throw error;
 
+        const hasUserLocation = latitude !== null && longitude !== null;
+
         const nearby = (data || [])
           .filter(m => m.is_available && m.latitude && m.longitude)
           .map(m => {
-            const dist = haversineDistance(latitude, longitude, m.latitude!, m.longitude!);
-            const etaMin = Math.round((dist / 30) * 60); // ~30 km/h avg
+            const dist = hasUserLocation
+              ? haversineDistance(latitude!, longitude!, m.latitude!, m.longitude!)
+              : 0;
+            const etaMin = hasUserLocation ? Math.round((dist / 30) * 60) : 0;
             return {
               id: m.id!,
               full_name: m.full_name || 'Unknown',
@@ -95,7 +99,9 @@ const BookService: React.FC = () => {
               latitude: m.latitude!,
               longitude: m.longitude!,
               distance: dist,
-              eta: etaMin < 60 ? `${etaMin} min` : `${(etaMin / 60).toFixed(1)} hr`,
+              eta: hasUserLocation
+                ? (etaMin < 60 ? `${etaMin} min` : `${(etaMin / 60).toFixed(1)} hr`)
+                : 'N/A',
             } as NearbyMechanic;
           })
           .sort((a, b) => a.distance - b.distance);
