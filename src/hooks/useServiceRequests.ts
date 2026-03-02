@@ -81,13 +81,13 @@ export const useServiceRequests = () => {
       const mechanics: NearbyMechanic[] = (data || [])
         .filter(m => {
           const isSelf = m.user_id === user?.id;
-          if (isSelf) console.log('[FindMechanics] Filtering out self:', m.full_name);
-          // Only show verified + online mechanics to users
-          if (!m.is_verified) {
-            console.log('[FindMechanics] Filtering unverified:', m.full_name);
+          if (isSelf) {
+            console.log('[FindMechanics] Filtering out self:', m.full_name);
             return false;
           }
-          return !isSelf;
+
+          // Show nearby mechanics based on availability; verification is handled in dispatch/assignment flows
+          return true;
         })
         .map(m => {
           const dist = haversineDistance(lat, lng, m.latitude, m.longitude);
