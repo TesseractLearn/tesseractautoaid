@@ -128,16 +128,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Query available AND verified mechanics only
+    // Query online mechanics (prefer verified, fallback to unverified if none verified in range)
     const { data: mechanics, error: mechErr } = await supabase
       .from('mechanics')
       .select('*')
       .eq('is_available', true)
-      .eq('is_verified', true)
     if (mechErr) throw mechErr
 
     // Filter by radius and exclude already-offered mechanics
-    const candidates = (mechanics || [])
+    const nearbyCandidates = (mechanics || [])
       .filter(m => !excludeIds.includes(m.id))
       .map(m => {
         const distKm = haversineDistance(booking.latitude, booking.longitude, m.latitude, m.longitude)
@@ -145,6 +144,10 @@ Deno.serve(async (req) => {
         return { ...m, distKm, etaMinutes }
       })
       .filter(m => m.distKm <= radius)
+
+    const verifiedCandidates = nearbyCandidates.filter(m => m.is_verified === true)
+    const candidates = verifiedCandidates.length > 0 ? verifiedCandidates : nearbyCandidates
+    const usedUnverifiedFallback = verifiedCandidates.length === 0 && nearbyCandidates.length > 0
 
     if (candidates.length === 0) {
       await supabase
@@ -200,6 +203,7 @@ Deno.serve(async (req) => {
       success: true,
       status: 'offer_sent',
       offersCount: scored.length,
+      usedUnverifiedFallback,
       candidates: scored,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
