@@ -25,15 +25,14 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token)
-    if (claimsErr || !claimsData?.claims) {
+    const { data: userData, error: userErr } = await userClient.auth.getUser()
+    if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    const userId = claimsData.claims.sub
+    const userId = userData.user.id
 
     // Use service role for transactional operations
     const supabase = createClient(
@@ -65,7 +64,7 @@ Deno.serve(async (req) => {
     // Verify caller is this mechanic
     const { data: mechanic } = await supabase
       .from('mechanics')
-      .select('id, active_jobs_count, recent_jobs_count, total_jobs_count')
+      .select('id, recent_jobs_count, total_jobs_count')
       .eq('id', mechanicId)
       .eq('user_id', userId)
       .single()
@@ -76,8 +75,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Enforce max 3 active jobs per mechanic
-    if ((mechanic.active_jobs_count || 0) >= 3) {
+    // Enforce max active jobs based on actual booking states (avoid stale counter blocking)
+    const activeStatuses = ['accepted', 'on_way', 'repair_in_progress', 'in_progress']
+    const { count: activeBookingsCount, error: activeCountError } = await supabase
+      .from('bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('mechanic_id', mechanicId)
+      .in('status', activeStatuses)
+
+    if (activeCountError) throw activeCountError
+
+    if ((activeBookingsCount || 0) >= 3) {
       return new Response(JSON.stringify({ error: 'Max 3 active jobs allowed. Complete or cancel an existing job first.' }), {
         status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -142,7 +150,7 @@ Deno.serve(async (req) => {
     await supabase
       .from('mechanics')
       .update({
-        active_jobs_count: (mechanic.active_jobs_count || 0) + 1,
+        active_jobs_count: (activeBookingsCount || 0) + 1,
         recent_jobs_count: (mechanic.recent_jobs_count || 0) + 1,
         total_jobs_count: (mechanic.total_jobs_count || 0) + 1,
       })

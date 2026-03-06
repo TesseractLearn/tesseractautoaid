@@ -176,13 +176,22 @@ export const useMechanicRequests = () => {
         body: { bookingId: offer.booking_id, mechanicId },
       });
 
-      if (error) throw error;
+      if (error) {
+        let message = error.message || 'Failed to accept request';
+        const response = (error as any).context;
+        if (response && typeof response.json === 'function') {
+          const payload = await response.json().catch(() => null);
+          if (payload?.error) message = payload.error;
+        }
+        throw new Error(message);
+      }
+
       if (data?.error) throw new Error(data.error);
 
       setRequests(prev => prev.filter(r => r.id !== offerId));
       toast.success('Job accepted! Navigate to the customer.');
     } catch (err: any) {
-      toast.error('Failed to accept: ' + err.message);
+      toast.error('Failed to accept: ' + (err?.message || 'Please try again'));
     }
   }, [mechanicId, requests]);
 
