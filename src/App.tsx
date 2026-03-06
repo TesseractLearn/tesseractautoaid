@@ -11,6 +11,7 @@ import RoleSelection from "./pages/RoleSelection";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import InstallApp from "./pages/InstallApp";
+import ChatPage from "./pages/ChatPage";
 
 // Layouts
 import UserLayout from "./layouts/UserLayout";
@@ -87,6 +88,7 @@ const App = () => (
               <Route path="find-mechanics" element={<FindMechanics />} />
               <Route path="mechanic/:mechanicId" element={<ViewMechanicProfile />} />
               <Route path="track" element={<UserTrack />} />
+              <Route path="chat/:bookingId" element={<ChatPage />} />
               <Route path="history" element={<UserHistory />} />
               <Route path="profile" element={<UserProfile />} />
               <Route path="vehicles" element={<MyVehicles />} />
@@ -112,6 +114,7 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<MechanicHome />} />
+              <Route path="chat/:bookingId" element={<ChatPage />} />
               <Route path="jobs" element={<MechanicJobs />} />
               <Route path="earnings" element={<MechanicEarnings />} />
               <Route path="stats" element={<MechanicStats />} />

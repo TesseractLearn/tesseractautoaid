@@ -477,8 +477,12 @@ const UserTrack: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {/* No phone exposure — contact via in-app chat only */}
-                    <Button variant="outline" size="icon">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => navigate(`/user/chat/${activeBooking.id}`)}
+                      title="Chat with mechanic"
+                    >
                       <MessageCircle className="w-4 h-4" />
                     </Button>
                   </div>
