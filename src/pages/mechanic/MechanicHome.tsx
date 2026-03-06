@@ -20,7 +20,8 @@ import {
   Navigation,
   Check,
   X,
-  Eye
+  Eye,
+  MessageCircle
 } from 'lucide-react';
 import { 
   PunctureIcon, 
@@ -505,6 +506,17 @@ const MechanicHome: React.FC = () => {
                             {job.status.replace('_', ' ')}
                           </p>
                         </div>
+                        {isActive && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2"
+                            onClick={() => navigate(`/mechanic/chat/${job.id}`)}
+                            title="Chat with customer"
+                          >
+                            <MessageCircle className="w-3 h-3" />
+                          </Button>
+                        )}
                         {isActive && job.status !== 'in_progress' && (
                           <Button
                             size="sm"
