@@ -205,7 +205,79 @@ export const useServiceRequests = () => {
     }
   }, [user, fetchNearbyMechanics]);
 
-  // User manually selects a mechanic (Path A)
+  // Create booking and send to one selected mechanic (mechanic still decides accept/reject)
+  const createDirectRequest = useCallback(async (params: {
+    serviceType: string;
+    issueDescription?: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+    selectedProblems?: string[];
+    severity?: string;
+    estimatedPriceMin?: number;
+    estimatedPriceMax?: number;
+  }, mechanicId: string) => {
+    if (!user) return null;
+    setLoading(true);
+    setSelecting(true);
+
+    try {
+      const { count, error: countErr } = await supabase
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'offer_sent', 'accepted', 'mechanic_arriving', 'in_progress']);
+
+      if (!countErr && (count || 0) >= 3) {
+        toast.error('Max 3 active bookings allowed. Complete or cancel an existing booking first.');
+        return null;
+      }
+
+      const { data: booking, error: insertErr } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: user.id,
+          service_type: params.serviceType,
+          issue_description: params.issueDescription || null,
+          latitude: params.latitude,
+          longitude: params.longitude,
+          address: params.address || null,
+          status: 'pending',
+          selected_problems: params.selectedProblems || [],
+          severity: params.severity || 'medium',
+          estimated_price_min: params.estimatedPriceMin || null,
+          estimated_price_max: params.estimatedPriceMax || null,
+        } as any)
+        .select()
+        .single();
+
+      if (insertErr || !booking) {
+        throw insertErr || new Error('Failed to create booking');
+      }
+
+      setActiveBooking(booking);
+      fetchNearbyMechanics(params.latitude, params.longitude);
+
+      const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
+        body: { bookingId: booking.id, mechanicId },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(data?.message || 'Request sent to mechanic. Waiting for response.');
+      setActiveBooking(prev => prev ? { ...prev, status: 'offer_sent', mechanic_id: null } : booking);
+      return booking;
+    } catch (err: any) {
+      toast.error('Failed to send request: ' + err.message);
+      return null;
+    } finally {
+      setLoading(false);
+      setSelecting(false);
+    }
+  }, [user, fetchNearbyMechanics]);
+
+  // User manually targets a mechanic for the active booking (mechanic still decides)
   const selectMechanic = useCallback(async (mechanicId: string) => {
     if (!activeBooking) return;
     setSelecting(true);
@@ -218,8 +290,8 @@ export const useServiceRequests = () => {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      toast.success(data?.message || 'Mechanic selected!');
-      setActiveBooking(prev => prev ? { ...prev, status: 'accepted', mechanic_id: mechanicId } : null);
+      toast.success(data?.message || 'Request sent to mechanic. Waiting for response.');
+      setActiveBooking(prev => prev ? { ...prev, status: 'offer_sent', mechanic_id: null } : null);
     } catch (err: any) {
       toast.error('Failed to select mechanic: ' + err.message);
     } finally {
@@ -359,6 +431,7 @@ export const useServiceRequests = () => {
     selecting,
     mechanicsLoading,
     createRequest,
+    createDirectRequest,
     cancelRequest,
     selectMechanic,
     fetchNearbyMechanics,
