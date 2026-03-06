@@ -145,18 +145,24 @@ export const useMechanicRequests = () => {
         schema: 'public',
         table: 'booking_offers',
         filter: `mechanic_id=eq.${mechanicId}`,
-      }, (payload) => {
+      }, async (payload) => {
         const updated = payload.new as IncomingOffer;
+
         if (updated.status !== 'pending') {
           setRequests(prev => prev.filter(r => r.id !== updated.id));
+          return;
         }
+
+        // If an offer is moved back to pending (e.g., targeted manual selection), refresh list + notify
+        await fetchRequests();
+        toast.info('🔔 New job request!', { duration: 5000 });
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [mechanicId]);
+  }, [mechanicId, fetchRequests]);
 
   // Accept an offer via edge function
   const acceptRequest = useCallback(async (offerId: string) => {

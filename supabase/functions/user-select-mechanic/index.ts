@@ -56,10 +56,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Verify booking belongs to this user and is still open
+    // Verify booking belongs to this user and is still open for requests
     const { data: booking } = await supabase
       .from('bookings')
-      .select('*')
+      .select('id, user_id, status')
       .eq('id', bookingId)
       .eq('user_id', userId)
       .in('status', ['pending', 'offer_sent'])
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Verify mechanic exists and is available
+    // Verify mechanic exists and can currently receive requests
     const { data: mechanic } = await supabase
       .from('mechanics')
       .select('id, full_name, is_available')
@@ -84,57 +84,65 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Update booking: assign mechanic, set status to accepted
-    await supabase
-      .from('bookings')
-      .update({ status: 'accepted', mechanic_id: mechanicId })
-      .eq('id', bookingId)
+    if (mechanic.is_available !== true) {
+      return new Response(JSON.stringify({ error: 'Selected mechanic is currently offline' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
-    // Expire all existing offers for this booking
+    // Optional targeting behavior: expire other pending offers so only selected mechanic is notified
     await supabase
       .from('booking_offers')
       .update({ status: 'expired' })
       .eq('booking_id', bookingId)
+      .eq('status', 'pending')
+      .neq('mechanic_id', mechanicId)
 
-    // Create an accepted offer record for the selected mechanic
-    await supabase
+    // Ensure selected mechanic has a pending offer (request to accept/reject)
+    const { data: existingOffer } = await supabase
       .from('booking_offers')
-      .insert({
-        booking_id: bookingId,
-        mechanic_id: mechanicId,
-        status: 'accepted',
-        score: 1,
-        eta_minutes: null,
-      })
+      .select('id, status')
+      .eq('booking_id', bookingId)
+      .eq('mechanic_id', mechanicId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    // Increment mechanic job counts
-    const { data: mechFull } = await supabase
-      .from('mechanics')
-      .select('active_jobs_count, recent_jobs_count, total_jobs_count')
-      .eq('id', mechanicId)
-      .single()
-
-    if (mechFull) {
+    if (existingOffer) {
+      if (existingOffer.status !== 'pending') {
+        await supabase
+          .from('booking_offers')
+          .update({ status: 'pending', score: 1, eta_minutes: null })
+          .eq('id', existingOffer.id)
+      }
+    } else {
       await supabase
-        .from('mechanics')
-        .update({
-          active_jobs_count: (mechFull.active_jobs_count || 0) + 1,
-          recent_jobs_count: (mechFull.recent_jobs_count || 0) + 1,
-          total_jobs_count: (mechFull.total_jobs_count || 0) + 1,
+        .from('booking_offers')
+        .insert({
+          booking_id: bookingId,
+          mechanic_id: mechanicId,
+          status: 'pending',
+          score: 1,
+          eta_minutes: null,
         })
-        .eq('id', mechanicId)
     }
 
-    // Update linked service requests
+    // Keep booking open until mechanic accepts
+    await supabase
+      .from('bookings')
+      .update({ status: 'offer_sent', mechanic_id: null })
+      .eq('id', bookingId)
+
+    // Keep related service requests pending and targeted to the selected mechanic
     await supabase
       .from('service_requests')
-      .update({ status: 'accepted', target_mechanic_id: mechanicId })
+      .update({ status: 'pending', target_mechanic_id: mechanicId })
       .eq('user_id', userId)
       .eq('status', 'pending')
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: `Mechanic ${mechanic.full_name} selected!` 
+    return new Response(JSON.stringify({
+      success: true,
+      message: `Request sent to ${mechanic.full_name}. Waiting for accept/reject.`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

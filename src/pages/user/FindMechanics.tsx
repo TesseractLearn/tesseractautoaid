@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { ArrowLeft, Send, MapPin, Loader2, X, Star, Clock, CheckCircle2, User, Radio, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,18 +88,17 @@ const MechanicCard: React.FC<{
 
 const FindMechanics: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { latitude, longitude, hasLocation, accuracy, source, loading: locationLoading, requestLocation, setManualLocation } = useGeolocation();
   const { placeName, isLoading: geocodeLoading } = useReverseGeocode(latitude, longitude);
   const {
     activeBooking,
-    offers,
     nearbyMechanics,
     loading: requestLoading,
     dispatching,
     selecting,
     mechanicsLoading,
     createRequest,
+    createDirectRequest,
     cancelRequest,
     selectMechanic,
     fetchNearbyMechanics,
@@ -169,7 +167,7 @@ const FindMechanics: React.FC = () => {
     selectMechanic(mechanicId);
   };
 
-  // Direct select (from service step - creates booking + assigns mechanic directly, no dispatch)
+  // Direct select (from service step) - sends request to chosen mechanic for accept/reject
   const handleDirectSelect = async (mechanicId: string) => {
     console.log('[FindMechanics] User selected mechanic:', mechanicId, 'service:', selectedService);
     if (!latitude || !longitude || !selectedService) {
@@ -177,43 +175,25 @@ const FindMechanics: React.FC = () => {
       document.getElementById('service-picker')?.scrollIntoView({ behavior: 'smooth' });
       return;
     }
+
     setDirectSelecting(true);
     try {
       const price = computePriceEstimate(selectedSymptoms);
       const severity = computeSeverity(selectedSymptoms);
 
-      // Create booking directly (skip dispatch) so status stays 'pending'
-      const { data: booking, error: insertErr } = await supabase
-        .from('bookings')
-        .insert({
-          user_id: user?.id,
-          service_type: selectedService,
-          issue_description: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : null,
-          latitude,
-          longitude,
-          status: 'pending',
-          selected_problems: selectedSymptoms,
-          severity: severity || 'medium',
-          estimated_price_min: price.min || null,
-          estimated_price_max: price.max || null,
-        } as any)
-        .select()
-        .single();
+      const booking = await createDirectRequest({
+        serviceType: selectedService,
+        issueDescription: selectedSymptoms.length > 0 ? selectedSymptoms.join(', ') : undefined,
+        latitude,
+        longitude,
+        selectedProblems: selectedSymptoms,
+        severity,
+        estimatedPriceMin: price.min || undefined,
+        estimatedPriceMax: price.max || undefined,
+      }, mechanicId);
 
-      if (insertErr || !booking) {
-        toast.error('Failed to create booking: ' + (insertErr?.message || 'Unknown error'));
-        return;
-      }
-
-      // Now assign the mechanic directly
-      const { data, error } = await supabase.functions.invoke('user-select-mechanic', {
-        body: { bookingId: booking.id, mechanicId },
-      });
-      if (error || data?.error) {
-        toast.error('Failed to assign mechanic: ' + (data?.error || error?.message));
-      } else {
-        toast.success('Mechanic selected! They are on their way.');
-        navigate('/user/track');
+      if (booking) {
+        setStep('waiting');
       }
     } catch (err: any) {
       toast.error('Failed: ' + err.message);
