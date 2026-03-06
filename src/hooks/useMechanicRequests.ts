@@ -93,6 +93,19 @@ export const useMechanicRequests = () => {
     fetchRequests();
   }, [fetchRequests]);
 
+  // Polling fallback in case realtime events are missed on unstable networks
+  useEffect(() => {
+    if (!mechanicId) return;
+
+    const intervalId = window.setInterval(() => {
+      fetchRequests();
+    }, 10000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mechanicId, fetchRequests]);
+
   // Real-time subscription for new offers
   useEffect(() => {
     if (!mechanicId) return;

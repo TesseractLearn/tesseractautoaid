@@ -115,31 +115,66 @@ const MechanicHome: React.FC = () => {
 
   const handleToggleOnline = async (checked: boolean) => {
     if (!mechanic) return;
+
+    if (checked && (!latitude || !longitude)) {
+      toast.error('Enable location before going online');
+      requestLocation();
+      return;
+    }
+
     setTogglingOnline(true);
-    
+
     try {
       const updateData: any = { is_available: checked };
-      
-      // Update location when going online
-      if (checked && latitude && longitude) {
+
+      if (checked) {
         updateData.latitude = latitude;
         updateData.longitude = longitude;
       }
 
-      await supabase
+      const { error } = await supabase
         .from('mechanics')
         .update(updateData)
         .eq('id', mechanic.id);
 
+      if (error) throw error;
+
       setIsOnline(checked);
-      refetchProfile();
+      await refetchProfile();
       toast.success(checked ? 'You are now online! You will receive job requests.' : 'You are now offline.');
-    } catch (err) {
+    } catch (error) {
+      console.error('Failed to toggle mechanic availability:', error);
       toast.error('Failed to update status');
     } finally {
       setTogglingOnline(false);
     }
   };
+
+  // Keep mechanic GPS fresh while online so dispatch can target accurate nearby providers
+  useEffect(() => {
+    if (!mechanic?.id || !isOnline || !latitude || !longitude) return;
+
+    let cancelled = false;
+
+    const syncLocation = async () => {
+      const { error } = await supabase
+        .from('mechanics')
+        .update({ latitude, longitude })
+        .eq('id', mechanic.id);
+
+      if (!cancelled && error) {
+        console.error('Failed to sync mechanic location:', error);
+      }
+    };
+
+    syncLocation();
+    const intervalId = window.setInterval(syncLocation, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [mechanic?.id, isOnline, latitude, longitude]);
 
   const handleLocationClick = () => {
     if (!hasLocation) {
