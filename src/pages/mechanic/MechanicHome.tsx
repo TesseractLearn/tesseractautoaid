@@ -21,7 +21,8 @@ import {
   Check,
   X,
   Eye,
-  MessageCircle
+  MessageCircle,
+  Wrench
 } from 'lucide-react';
 import { 
   PunctureIcon, 
@@ -72,6 +73,7 @@ const MechanicHome: React.FC = () => {
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const [updatingJobStatus, setUpdatingJobStatus] = useState<string | null>(null);
 
   const handleCancelJob = async (jobId: string, reason: string) => {
     try {
@@ -95,6 +97,33 @@ const MechanicHome: React.FC = () => {
     } catch {
       toast.error('Failed to cancel job');
       throw new Error('cancel failed');
+    }
+  };
+
+  const handleJobStatusUpdate = async (jobId: string, newStatus: string) => {
+    setUpdatingJobStatus(jobId);
+    try {
+      const { error } = await supabase.from('bookings').update({ status: newStatus }).eq('id', jobId);
+      if (error) throw error;
+      const labels: Record<string, string> = {
+        on_way: 'On your way!',
+        reached: 'Marked as reached!',
+        repair_in_progress: 'Repair started!',
+      };
+      toast.success(labels[newStatus] || 'Status updated');
+      // Refresh recent jobs
+      if (mechanic?.id) {
+        const { data } = await supabase.from('bookings')
+          .select('id, service_type, status, created_at, final_price, estimated_price, address, payment_status')
+          .eq('mechanic_id', mechanic.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        setRecentJobs(data || []);
+      }
+    } catch {
+      toast.error('Failed to update status');
+    } finally {
+      setUpdatingJobStatus(null);
     }
   };
 
@@ -237,7 +266,7 @@ const MechanicHome: React.FC = () => {
       setJobsLoading(true);
       const { data } = await supabase
         .from('bookings')
-        .select('id, service_type, status, created_at, final_price, estimated_price, address')
+        .select('id, service_type, status, created_at, final_price, estimated_price, address, payment_status')
         .eq('mechanic_id', mechanic.id)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -489,7 +518,39 @@ const MechanicHome: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 {recentJobs.map((job) => {
-                  const isActive = ['accepted', 'mechanic_arriving', 'in_progress'].includes(job.status);
+                  const isActive = ['accepted', 'on_way', 'reached', 'repair_in_progress', 'in_progress'].includes(job.status);
+                  const statusLabel: Record<string, string> = {
+                    accepted: 'Accepted', on_way: 'On Way', reached: 'Reached',
+                    repair_in_progress: 'Repairing', in_progress: 'In Progress',
+                    completed: 'Completed', cancelled: 'Cancelled', mechanic_cancelled: 'Cancelled',
+                  };
+
+                  const getQuickAction = () => {
+                    if (updatingJobStatus === job.id) return <Loader2 className="w-3 h-3 animate-spin text-primary" />;
+                    switch (job.status) {
+                      case 'accepted':
+                        return (
+                          <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => handleJobStatusUpdate(job.id, 'on_way')}>
+                            <Navigation className="w-3 h-3" />
+                          </Button>
+                        );
+                      case 'on_way':
+                        return (
+                          <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => handleJobStatusUpdate(job.id, 'reached')}>
+                            <MapPin className="w-3 h-3" />
+                          </Button>
+                        );
+                      case 'reached':
+                        return (
+                          <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => handleJobStatusUpdate(job.id, 'repair_in_progress')}>
+                            <Wrench className="w-3 h-3" />
+                          </Button>
+                        );
+                      default:
+                        return null;
+                    }
+                  };
+
                   return (
                     <div key={job.id} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
                       <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -503,27 +564,17 @@ const MechanicHome: React.FC = () => {
                         <div className="text-right">
                           <p className="text-sm font-medium text-foreground">₹{job.final_price || job.estimated_price || '—'}</p>
                           <p className={`text-[10px] font-medium capitalize ${job.status === 'completed' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                            {job.status.replace('_', ' ')}
+                            {statusLabel[job.status] || job.status.replace('_', ' ')}
                           </p>
                         </div>
                         {isActive && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-xs h-7 px-2"
-                            onClick={() => navigate(`/mechanic/chat/${job.id}`)}
-                            title="Chat with customer"
-                          >
+                          <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => navigate(`/mechanic/chat/${job.id}`)} title="Chat">
                             <MessageCircle className="w-3 h-3" />
                           </Button>
                         )}
-                        {isActive && job.status !== 'in_progress' && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="text-xs h-7 px-2"
-                            onClick={() => setCancellingJobId(job.id)}
-                          >
+                        {isActive && getQuickAction()}
+                        {isActive && !['repair_in_progress', 'in_progress'].includes(job.status) && (
+                          <Button size="sm" variant="destructive" className="text-xs h-7 px-2" onClick={() => setCancellingJobId(job.id)}>
                             <X className="w-3 h-3" />
                           </Button>
                         )}
