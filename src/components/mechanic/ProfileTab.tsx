@@ -42,18 +42,33 @@ const ProfileTab: React.FC = () => {
 
   const handleToggleOnline = async (checked: boolean) => {
     if (!mechanic) return;
+
+    if (checked && (!latitude || !longitude)) {
+      toast.error('Enable location before going online');
+      requestLocation();
+      return;
+    }
+
     setTogglingOnline(true);
     try {
       const update: any = { is_available: checked };
-      if (checked && latitude && longitude) {
+      if (checked) {
         update.latitude = latitude;
         update.longitude = longitude;
       }
-      await supabase.from('mechanics').update(update).eq('id', mechanic.id);
+
+      const { error } = await supabase
+        .from('mechanics')
+        .update(update)
+        .eq('id', mechanic.id);
+
+      if (error) throw error;
+
       setIsOnline(checked);
-      refetch();
+      await refetch();
       toast.success(checked ? 'You are now online!' : 'You are now offline.');
-    } catch {
+    } catch (error) {
+      console.error('Failed to toggle mechanic availability:', error);
       toast.error('Failed to update status');
     } finally {
       setTogglingOnline(false);
