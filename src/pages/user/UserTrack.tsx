@@ -411,8 +411,8 @@ const UserTrack: React.FC = () => {
           {/* Normal tracking UI (hidden when payment/completion overlays are shown) */}
           {!showPayment && !showCompletion && (
             <>
-              {/* ETA Banner */}
-              {activeBooking.mechanic && activeBooking.status !== 'in_progress' && activeBooking.status !== 'completed' && (
+              {/* ETA Banner - shown before mechanic reaches */}
+              {activeBooking.mechanic && ['accepted', 'on_way'].includes(activeBooking.status) && (
                 <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3">
                   <Clock className="w-6 h-6 text-primary" />
                   <div>
@@ -422,7 +422,19 @@ const UserTrack: React.FC = () => {
                 </div>
               )}
 
-              {activeBooking.status === 'in_progress' && (
+              {/* Mechanic reached */}
+              {activeBooking.status === 'reached' && (
+                <div className="bg-accent/10 rounded-xl p-4 flex items-center gap-3">
+                  <MapPin className="w-6 h-6 text-accent" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Mechanic Has Arrived</p>
+                    <p className="text-xs text-muted-foreground">Your mechanic has reached your location</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Repair in progress */}
+              {(activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress') && (
                 <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
                   <Wrench className="w-6 h-6 text-success" />
                   <div>
@@ -432,12 +444,24 @@ const UserTrack: React.FC = () => {
                 </div>
               )}
 
-              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
-                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
-                  <CheckCircle2 className="w-6 h-6 text-success" />
+              {/* Job Completed — Payment notification */}
+              {activeBooking.status === 'completed' && (!activeBooking.transaction || activeBooking.payment_status === 'unpaid') && (
+                <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3 border border-primary/20">
+                  <CheckCircle2 className="w-6 h-6 text-primary" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">Job Completed!</p>
-                    <p className="text-xs text-muted-foreground">Review and release payment</p>
+                    <p className="text-xs text-muted-foreground">Please complete payment to rate the mechanic</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment done, ready to rate */}
+              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
+                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3 border border-success/20">
+                  <Star className="w-6 h-6 text-warning" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Payment Received!</p>
+                    <p className="text-xs text-muted-foreground">Release payment & rate your mechanic</p>
                   </div>
                 </div>
               )}
