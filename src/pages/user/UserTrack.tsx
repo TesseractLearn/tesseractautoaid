@@ -569,8 +569,8 @@ const UserTrack: React.FC = () => {
                 </Button>
               )}
 
-              {/* Cancel Job button - only before repair_in_progress */}
-              {!['in_progress', 'completed'].includes(activeBooking.status) && (
+              {/* Cancel Job button - only before repair starts */}
+              {!['repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status) && (
                 <Button
                   variant="destructive"
                   size="lg"
@@ -582,7 +582,7 @@ const UserTrack: React.FC = () => {
                 </Button>
               )}
 
-              {activeBooking.status === 'in_progress' && (
+              {(activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress') && (
                 <p className="text-xs text-center text-muted-foreground">
                   Cannot cancel — work in progress
                 </p>
