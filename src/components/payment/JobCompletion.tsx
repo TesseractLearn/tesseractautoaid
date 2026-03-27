@@ -3,10 +3,15 @@ import { CheckCircle2, AlertTriangle, Star, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { usePayment } from '@/hooks/usePayment';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import PaymentBreakdownCard from './PaymentBreakdownCard';
 
 interface JobCompletionProps {
   transactionId: string;
+  bookingId: string;
+  mechanicId: string;
   mechanicName: string;
   laborCost: number;
   partsCost: number;
@@ -23,6 +28,8 @@ interface JobCompletionProps {
 
 const JobCompletion: React.FC<JobCompletionProps> = ({
   transactionId,
+  bookingId,
+  mechanicId,
   mechanicName,
   laborCost,
   partsCost,
@@ -37,9 +44,34 @@ const JobCompletion: React.FC<JobCompletionProps> = ({
   onDispute,
 }) => {
   const { loading, releasePayment, raiseDispute } = usePayment();
+  const { user } = useAuth();
   const [step, setStep] = useState<'confirm' | 'rating' | 'dispute' | 'done'>('confirm');
   const [rating, setRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
   const [disputeReason, setDisputeReason] = useState('');
+
+  const handleSubmitReview = async () => {
+    if (!user) return;
+    setSubmittingReview(true);
+    try {
+      const { error } = await supabase.from('mechanic_reviews').insert({
+        mechanic_id: mechanicId,
+        user_id: user.id,
+        booking_id: bookingId,
+        rating,
+        comment: reviewComment.trim() || null,
+      });
+      if (error) throw error;
+      toast.success('Review submitted! Thank you.');
+      setStep('done');
+      onPaymentReleased();
+    } catch (err: any) {
+      toast.error('Failed to submit review: ' + err.message);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleRelease = async () => {
     const success = await releasePayment(transactionId);
@@ -71,8 +103,15 @@ const JobCompletion: React.FC<JobCompletionProps> = ({
               </button>
             ))}
           </div>
-          <Button onClick={() => { setStep('done'); onPaymentReleased(); }} className="w-full">
-            Submit Rating
+          <Textarea
+            placeholder="Leave a comment (optional)..."
+            value={reviewComment}
+            onChange={(e) => setReviewComment(e.target.value)}
+            rows={3}
+          />
+          <Button onClick={handleSubmitReview} className="w-full" disabled={submittingReview}>
+            {submittingReview ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Submit Review
           </Button>
         </div>
       </div>
