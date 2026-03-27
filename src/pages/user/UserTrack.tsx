@@ -98,7 +98,7 @@ const UserTrack: React.FC = () => {
         .from('bookings')
         .select('id, status, service_type, mechanic_id, latitude, longitude, mechanic_quote, platform_fee, payment_status, labor_cost, parts_cost, tax_amount, estimated_hours, actual_hours')
         .eq('user_id', user.id)
-        .in('status', ['accepted', 'mechanic_arriving', 'in_progress', 'completed'])
+        .in('status', ['accepted', 'on_way', 'reached', 'repair_in_progress', 'in_progress', 'completed'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -273,8 +273,11 @@ const UserTrack: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'accepted': return 'Mechanic accepted your request';
-      case 'mechanic_arriving': return 'Mechanic is on the way';
+      case 'on_way': return 'Mechanic is on the way';
+      case 'reached': return 'Mechanic has reached your location';
+      case 'repair_in_progress': return 'Repair in progress';
       case 'in_progress': return 'Repair in progress';
+      case 'completed': return 'Job completed!';
       default: return 'Processing...';
     }
   };
@@ -408,8 +411,8 @@ const UserTrack: React.FC = () => {
           {/* Normal tracking UI (hidden when payment/completion overlays are shown) */}
           {!showPayment && !showCompletion && (
             <>
-              {/* ETA Banner */}
-              {activeBooking.mechanic && activeBooking.status !== 'in_progress' && activeBooking.status !== 'completed' && (
+              {/* ETA Banner - shown before mechanic reaches */}
+              {activeBooking.mechanic && ['accepted', 'on_way'].includes(activeBooking.status) && (
                 <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3">
                   <Clock className="w-6 h-6 text-primary" />
                   <div>
@@ -419,7 +422,19 @@ const UserTrack: React.FC = () => {
                 </div>
               )}
 
-              {activeBooking.status === 'in_progress' && (
+              {/* Mechanic reached */}
+              {activeBooking.status === 'reached' && (
+                <div className="bg-accent/10 rounded-xl p-4 flex items-center gap-3">
+                  <MapPin className="w-6 h-6 text-accent" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Mechanic Has Arrived</p>
+                    <p className="text-xs text-muted-foreground">Your mechanic has reached your location</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Repair in progress */}
+              {(activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress') && (
                 <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
                   <Wrench className="w-6 h-6 text-success" />
                   <div>
@@ -429,12 +444,24 @@ const UserTrack: React.FC = () => {
                 </div>
               )}
 
-              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
-                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3">
-                  <CheckCircle2 className="w-6 h-6 text-success" />
+              {/* Job Completed — Payment notification */}
+              {activeBooking.status === 'completed' && (!activeBooking.transaction || activeBooking.payment_status === 'unpaid') && (
+                <div className="bg-primary/10 rounded-xl p-4 flex items-center gap-3 border border-primary/20">
+                  <CheckCircle2 className="w-6 h-6 text-primary" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">Job Completed!</p>
-                    <p className="text-xs text-muted-foreground">Review and release payment</p>
+                    <p className="text-xs text-muted-foreground">Please complete payment to rate the mechanic</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment done, ready to rate */}
+              {activeBooking.status === 'completed' && activeBooking.transaction?.status === 'paid' && (
+                <div className="bg-success/10 rounded-xl p-4 flex items-center gap-3 border border-success/20">
+                  <Star className="w-6 h-6 text-warning" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Payment Received!</p>
+                    <p className="text-xs text-muted-foreground">Release payment & rate your mechanic</p>
                   </div>
                 </div>
               )}
@@ -496,13 +523,18 @@ const UserTrack: React.FC = () => {
                 <ProgressStep label="Booking confirmed" done={true} active={false} />
                 <ProgressStep
                   label="Mechanic on the way"
-                  done={activeBooking.status === 'in_progress' || activeBooking.status === 'completed'}
-                  active={activeBooking.status === 'mechanic_arriving' || activeBooking.status === 'accepted'}
+                  done={['reached', 'repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status)}
+                  active={activeBooking.status === 'on_way' || activeBooking.status === 'accepted'}
+                />
+                <ProgressStep
+                  label="Mechanic reached"
+                  done={['repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status)}
+                  active={activeBooking.status === 'reached'}
                 />
                 <ProgressStep
                   label="Repair in progress"
                   done={activeBooking.status === 'completed'}
-                  active={activeBooking.status === 'in_progress'}
+                  active={activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress'}
                 />
                 <ProgressStep
                   label="Job completed"
@@ -513,6 +545,11 @@ const UserTrack: React.FC = () => {
                   label="Payment"
                   done={activeBooking.transaction?.status === 'paid' || activeBooking.transaction?.status === 'released_to_mechanic'}
                   active={activeBooking.status === 'completed' && !activeBooking.transaction}
+                />
+                <ProgressStep
+                  label="Rate & Review"
+                  done={activeBooking.transaction?.status === 'released_to_mechanic'}
+                  active={activeBooking.transaction?.status === 'paid'}
                 />
               </div>
 
@@ -532,8 +569,8 @@ const UserTrack: React.FC = () => {
                 </Button>
               )}
 
-              {/* Cancel Job button - only before repair_in_progress */}
-              {!['in_progress', 'completed'].includes(activeBooking.status) && (
+              {/* Cancel Job button - only before repair starts */}
+              {!['repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status) && (
                 <Button
                   variant="destructive"
                   size="lg"
@@ -545,7 +582,7 @@ const UserTrack: React.FC = () => {
                 </Button>
               )}
 
-              {activeBooking.status === 'in_progress' && (
+              {(activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress') && (
                 <p className="text-xs text-center text-muted-foreground">
                   Cannot cancel — work in progress
                 </p>
