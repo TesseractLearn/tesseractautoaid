@@ -523,13 +523,18 @@ const UserTrack: React.FC = () => {
                 <ProgressStep label="Booking confirmed" done={true} active={false} />
                 <ProgressStep
                   label="Mechanic on the way"
-                  done={activeBooking.status === 'in_progress' || activeBooking.status === 'completed'}
-                  active={activeBooking.status === 'mechanic_arriving' || activeBooking.status === 'accepted'}
+                  done={['reached', 'repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status)}
+                  active={activeBooking.status === 'on_way' || activeBooking.status === 'accepted'}
+                />
+                <ProgressStep
+                  label="Mechanic reached"
+                  done={['repair_in_progress', 'in_progress', 'completed'].includes(activeBooking.status)}
+                  active={activeBooking.status === 'reached'}
                 />
                 <ProgressStep
                   label="Repair in progress"
                   done={activeBooking.status === 'completed'}
-                  active={activeBooking.status === 'in_progress'}
+                  active={activeBooking.status === 'repair_in_progress' || activeBooking.status === 'in_progress'}
                 />
                 <ProgressStep
                   label="Job completed"
@@ -540,6 +545,11 @@ const UserTrack: React.FC = () => {
                   label="Payment"
                   done={activeBooking.transaction?.status === 'paid' || activeBooking.transaction?.status === 'released_to_mechanic'}
                   active={activeBooking.status === 'completed' && !activeBooking.transaction}
+                />
+                <ProgressStep
+                  label="Rate & Review"
+                  done={activeBooking.transaction?.status === 'released_to_mechanic'}
+                  active={activeBooking.transaction?.status === 'paid'}
                 />
               </div>
 
