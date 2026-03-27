@@ -98,7 +98,7 @@ const UserTrack: React.FC = () => {
         .from('bookings')
         .select('id, status, service_type, mechanic_id, latitude, longitude, mechanic_quote, platform_fee, payment_status, labor_cost, parts_cost, tax_amount, estimated_hours, actual_hours')
         .eq('user_id', user.id)
-        .in('status', ['accepted', 'mechanic_arriving', 'in_progress', 'completed'])
+        .in('status', ['accepted', 'on_way', 'reached', 'repair_in_progress', 'in_progress', 'completed'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -273,8 +273,11 @@ const UserTrack: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'accepted': return 'Mechanic accepted your request';
-      case 'mechanic_arriving': return 'Mechanic is on the way';
+      case 'on_way': return 'Mechanic is on the way';
+      case 'reached': return 'Mechanic has reached your location';
+      case 'repair_in_progress': return 'Repair in progress';
       case 'in_progress': return 'Repair in progress';
+      case 'completed': return 'Job completed!';
       default: return 'Processing...';
     }
   };
