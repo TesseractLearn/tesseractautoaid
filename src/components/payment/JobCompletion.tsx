@@ -103,8 +103,15 @@ const JobCompletion: React.FC<JobCompletionProps> = ({
               </button>
             ))}
           </div>
-          <Button onClick={() => { setStep('done'); onPaymentReleased(); }} className="w-full">
-            Submit Rating
+          <Textarea
+            placeholder="Leave a comment (optional)..."
+            value={reviewComment}
+            onChange={(e) => setReviewComment(e.target.value)}
+            rows={3}
+          />
+          <Button onClick={handleSubmitReview} className="w-full" disabled={submittingReview}>
+            {submittingReview ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Submit Review
           </Button>
         </div>
       </div>

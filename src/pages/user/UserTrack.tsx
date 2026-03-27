@@ -384,6 +384,8 @@ const UserTrack: React.FC = () => {
           {showCompletion && activeBooking.transaction && activeBooking.mechanic && (
             <JobCompletion
               transactionId={activeBooking.transaction.id}
+              bookingId={activeBooking.id}
+              mechanicId={activeBooking.mechanic.id}
               mechanicName={activeBooking.mechanic.full_name}
               laborCost={Number(activeBooking.transaction.labor_cost) || 0}
               partsCost={Number(activeBooking.transaction.parts_cost) || 0}
